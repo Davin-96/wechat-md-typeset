@@ -1,0 +1,15 @@
+# 依赖
+node_modules/
+
+# 构建产物：单个 exe 约 110 MB，超过 GitHub 仓库单文件上限
+out/
+
+# 运行时数据：文章、自定义主题、素材、设置（可能含图床 Token）
+数据/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*

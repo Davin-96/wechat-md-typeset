@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; script-src 'self'; connect-src 'self' https: http:;">
+  <title>公众号排版工具</title>
+  <link rel="stylesheet" href="css/app.css">
+  <script src="js/boot.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">排</div>
+        <span class="brand-name">公众号排版</span>
+      </div>
+      <div class="topbar-center">
+        <button id="editThemeBtn" class="btn btn-ghost">编辑样式</button>
+      </div>
+      <div class="topbar-actions">
+        <button id="insertImageBtn" class="btn btn-ghost">插入图片</button>
+        <button id="copyBtn" class="btn btn-primary">复制到公众号</button>
+        <button id="exportBtn" class="btn btn-ghost">导出HTML</button>
+        <button id="uiModeBtn" class="btn btn-icon" title="切换明暗">☾</button>
+        <button id="settingsBtn" class="btn btn-icon" title="设置">⚙</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="sidebar">
+        <div class="sidebar-tabs">
+          <button class="tab active" data-tab="articles">文章</button>
+          <button class="tab" data-tab="themes">主题</button>
+          <button class="tab" data-tab="images">素材</button>
+        </div>
+        <div class="sidebar-body">
+          <div class="tab-panel" data-panel="articles">
+            <button id="newArticleBtn" class="btn btn-block btn-soft">+ 新建文章</button>
+            <div id="articleList" class="list"></div>
+          </div>
+          <div class="tab-panel hidden" data-panel="themes">
+            <button id="newThemeBtn" class="btn btn-block btn-soft">+ 新建主题</button>
+            <div id="themeList" class="theme-grid"></div>
+          </div>
+          <div class="tab-panel hidden" data-panel="images">
+            <button id="uploadImageBtn" class="btn btn-block btn-soft">+ 上传素材</button>
+            <div id="imageList" class="list image-list"></div>
+          </div>
+        </div>
+        <div class="sidebar-footer">
+          <span id="dataDir" class="muted small"></span>
+        </div>
+      </aside>
+
+      <main class="editor-pane">
+        <div class="pane-header">
+          <input id="articleTitle" class="title-input" placeholder="无标题文章">
+        </div>
+        <textarea id="mdEditor" class="md-editor" spellcheck="false" placeholder="在此输入 Markdown…&#10;&#10;# 标题&#10;正文段落&#10;&#10;> 引用&#10;&#10;```js&#10;code&#10;```"></textarea>
+        <div class="pane-footer">
+          <span id="wordCount" class="muted small">0 字</span>
+          <span id="saveStatus" class="muted small">未保存</span>
+        </div>
+      </main>
+
+      <section class="preview-pane">
+        <div class="pane-header">
+          <span class="pane-title">公众号预览</span>
+          <span id="previewThemeName" class="muted small"></span>
+        </div>
+        <div class="preview-scroll">
+          <div id="preview" class="preview-content"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="themeModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>编辑样式</h3>
+        <button class="btn btn-icon modal-close" data-close>✕</button>
+      </div>
+      <div class="modal-body" id="themeForm"></div>
+      <div class="modal-footer">
+        <input id="themeNameInput" class="input" placeholder="主题名称">
+        <button id="saveThemeBtn" class="btn btn-primary">保存主题</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="imageModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header"><h3>插入图片</h3><button class="btn btn-icon modal-close" data-close>✕</button></div>
+      <div class="modal-body">
+        <div class="seg-tabs">
+          <button class="seg active" data-imgtab="upload">本地上传</button>
+          <button class="seg" data-imgtab="url">图片URL</button>
+          <button class="seg" data-imgtab="library">素材库</button>
+        </div>
+        <div class="img-tab-panel" data-imgpanel="upload">
+          <div id="dropZone" class="drop-zone">
+            <p class="drop-title">点击或拖拽图片到此处</p>
+            <p class="muted small">自动上传到图床并插入文章</p>
+            <input id="fileInput" type="file" accept="image/*" hidden>
+          </div>
+          <div id="uploadStatus" class="muted small"></div>
+        </div>
+        <div class="img-tab-panel hidden" data-imgpanel="url">
+          <input id="imageUrlInput" class="input" placeholder="https://example.com/image.png">
+          <button id="insertUrlBtn" class="btn btn-primary btn-block">插入</button>
+        </div>
+        <div class="img-tab-panel hidden" data-imgpanel="library">
+          <div id="imagePickerList" class="list image-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-header"><h3>设置</h3><button class="btn btn-icon modal-close" data-close>✕</button></div>
+      <div class="modal-body">
+        <div class="field"><label>图床服务</label>
+          <select id="imageHostSelect" class="input">
+            <option value="catbox">Catbox（免登录）</option>
+            <option value="smms">SM.MS（需 Token）</option>
+            <option value="imgbb">ImgBB（需 Key）</option>
+            <option value="custom">自定义图床</option>
+          </select>
+        </div>
+        <div class="field"><label>SM.MS Token</label><input id="smmsToken" class="input" placeholder="sm.ms 账号 Token"></div>
+        <div class="field"><label>ImgBB Key</label><input id="imgbbKey" class="input" placeholder="imgbb API Key"></div>
+        <div id="customFields" class="hidden">
+          <div class="field"><label>API 地址</label><input id="customApiUrl" class="input" placeholder="https://你的图床/api/upload"></div>
+          <div class="form-grid">
+            <div class="field"><label>文件字段名</label><input id="customFileField" class="input" placeholder="file"></div>
+            <div class="field"><label>Token 请求头</label><input id="customTokenHeader" class="input" placeholder="Authorization"></div>
+          </div>
+          <div class="field"><label>Token（可选）</label><input id="customToken" class="input" placeholder="留空则不发送认证头"></div>
+          <div class="field"><label>响应 URL 路径</label><input id="customResponsePath" class="input" placeholder="data.url（留空自动识别或取纯文本）"></div>
+          <div class="field"><label>额外表单字段（可选，每行 key=value）</label><textarea id="customExtraFields" class="input" style="height:auto;min-height:56px;padding:8px 10px;line-height:1.5;resize:vertical;" placeholder="token=xxx&#10;type=image"></textarea></div>
+        </div>
+        <div class="field row"><label>自动保存</label><input id="autoSaveToggle" type="checkbox"></div>
+        <div class="field"><label>数据目录</label><div id="settingsDataDir" class="muted small"></div></div>
+        <p class="muted small note">图床上传依赖网络，国外服务在国内可能不稳定。手动填图片 URL 始终可用。</p>
+      </div>
+      <div class="modal-footer"><button id="saveSettingsBtn" class="btn btn-primary">保存设置</button></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="lib/markdown-it.min.js"></script>
+  <script src="lib/highlight.min.js"></script>
+  <script src="js/themes.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+{
+  "name": "wechat-md-editor",
+  "version": "1.0.0",
+  "description": "Markdown 转微信公众号排版工具",
+  "main": "src/main/main.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.qoder.wechatmd",
+    "productName": "WeChatMD",
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable",
+        "zip"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "portable": {
+      "artifactName": "公众号排版工具-便携版.exe"
+    }
+  },
+  "devDependencies": {
+    "@highlightjs/cdn-assets": "^11.12.0",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "markdown-it": "^15.0.3",
+    "png-to-ico": "^3.0.2",
+    "sharp": "^0.35.5"
+  }
+}
