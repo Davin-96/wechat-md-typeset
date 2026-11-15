@@ -23,7 +23,7 @@
 └─────────────────────────────────────────────────┘
 ```
 
-`webPreferences` 里 `contextIsolation: true`、`nodeIntegration: false`，渲染层拿不到 Node，只能通过 `preload.js` 暴露的 20 个 `window.api.*` 方法访问文件系统与剪贴板。这是Electron 应用的标准隔离做法，代价是所有 IO 都要写一遍 IPC handler（`main.js` 的 `registerIpc()` 基本是 store 方法的直连映射）。
+`webPreferences` 里 `contextIsolation: true`、`nodeIntegration: false`，渲染层拿不到 Node，只能通过 `preload.js` 暴露的 16 个 `window.api.*` 方法访问文件系统与剪贴板。这是Electron 应用的标准隔离做法，代价是所有 IO 都要写一遍 IPC handler（`main.js` 的 `registerIpc()` 基本是 store 方法的直连映射）。
 
 三栏工作台：左侧「文章 / 主题 / 素材」标签页，中间 Markdown 编辑器，右侧公众号预览。窗口默认 1320×840、最小 1024×680。
 
