@@ -97,7 +97,12 @@ npm run dist
 
 产物在 `out/`：`公众号排版工具-便携版.exe` 与 `公众号排版工具-安装版.zip`。
 
-**不想装环境**：直接下载 [最新版便携版 exe（Release）](https://github.com/Davin-96/wechat-md-typeset/releases/latest)，双击即可运行。仓库里不放安装包是因为单个 exe 超过 GitHub 仓库 100 MB 单文件上限，Release 附件不受此限制。
+**不想装环境**：到 [Releases](https://github.com/Davin-96/wechat-md-typeset/releases/latest) 下载，两个版本都放在 Release 附件里：
+
+- `WeChatMD-Portable-v1.0.0.exe` —— 便携版，双击即用、无需安装（约 106 MB，原名「公众号排版工具-便携版.exe」）
+- `WeChatMD-Setup-v1.0.0.zip` —— 安装版压缩包，解压后按向导安装（约 146 MB，原名「公众号排版工具-安装版.zip」）
+
+仓库里不放安装包：单个文件超过 GitHub 仓库 100 MB 上限，而 Release 附件上限是 2 GB。附件名使用 ASCII，是因为 GitHub 会把附件名里的中文字符规范化成 `-`（和仓库名一样）。
 
 ## 使用流程
 
