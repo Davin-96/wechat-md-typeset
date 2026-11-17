@@ -1,49 +1,68 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-ui-mode="auto">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; script-src 'self'; connect-src 'self' https: http:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>公众号排版工具</title>
   <link rel="stylesheet" href="css/app.css">
   <script src="js/boot.js"></script>
 </head>
 <body>
+  <div class="ambient" aria-hidden="true">
+    <div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+    <div class="grid-tex"></div>
+  </div>
+
   <div id="app">
-    <header class="topbar">
+    <header class="topbar glass">
       <div class="brand">
         <div class="brand-mark">排</div>
         <span class="brand-name">公众号排版</span>
       </div>
-      <div class="topbar-center">
-        <button id="editThemeBtn" class="btn btn-ghost">编辑样式</button>
+      <div class="seg top-seg" role="tablist" aria-label="主视图">
+        <button class="on" data-view="edit">编辑</button>
+        <button data-view="themes">主题</button>
+        <button data-view="assets">素材</button>
       </div>
       <div class="topbar-actions">
-        <button id="insertImageBtn" class="btn btn-ghost">插入图片</button>
+        <button id="editThemeBtn" class="btn">编辑样式</button>
+        <button id="insertImageBtn" class="btn">插入图片</button>
         <button id="copyBtn" class="btn btn-primary">复制到公众号</button>
-        <button id="exportBtn" class="btn btn-ghost">导出HTML</button>
-        <button id="uiModeBtn" class="btn btn-icon" title="切换明暗">☾</button>
-        <button id="settingsBtn" class="btn btn-icon" title="设置">⚙</button>
+        <button id="exportBtn" class="btn">导出 HTML</button>
+        <button id="uiModeBtn" class="btn btn-icon" title="切换明暗" aria-label="切换明暗">☾</button>
+        <button id="settingsBtn" class="btn btn-icon" title="设置" aria-label="设置">⚙</button>
       </div>
     </header>
 
     <div class="workspace">
-      <aside class="sidebar">
+      <aside class="sidebar panel glass">
         <div class="sidebar-tabs">
-          <button class="tab active" data-tab="articles">文章</button>
+          <button class="tab on" data-tab="articles">文章</button>
           <button class="tab" data-tab="themes">主题</button>
           <button class="tab" data-tab="images">素材</button>
         </div>
         <div class="sidebar-body">
           <div class="tab-panel" data-panel="articles">
-            <button id="newArticleBtn" class="btn btn-block btn-soft">+ 新建文章</button>
+            <button id="newArticleBtn" class="btn btn-block">+ 新建文章</button>
             <div id="articleList" class="list"></div>
           </div>
           <div class="tab-panel hidden" data-panel="themes">
-            <button id="newThemeBtn" class="btn btn-block btn-soft">+ 新建主题</button>
-            <div id="themeList" class="theme-grid"></div>
+            <div class="theme-search-wrap">
+              <svg viewBox="0 0 24 24" class="search-icon"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+              <input id="themeSearch" class="theme-search" placeholder="搜索主题…" autocomplete="off">
+            </div>
+            <div class="style-seg" id="styleSeg">
+              <button class="on" data-style="all">全部 <span>50</span></button>
+              <button data-style="modern">现代简约 <span>38</span></button>
+              <button data-style="special">特色版式 <span>12</span></button>
+            </div>
+            <div class="chips" id="themeChips"></div>
+            <button id="newThemeBtn" class="btn btn-block btn-new-theme">+ 新建主题</button>
+            <div id="themeList"></div>
           </div>
           <div class="tab-panel hidden" data-panel="images">
-            <button id="uploadImageBtn" class="btn btn-block btn-soft">+ 上传素材</button>
+            <button id="uploadImageBtn" class="btn btn-block">+ 上传素材</button>
             <div id="imageList" class="list image-list"></div>
           </div>
         </div>
@@ -52,51 +71,57 @@
         </div>
       </aside>
 
-      <main class="editor-pane">
+      <main class="editor-pane panel">
         <div class="pane-header">
           <input id="articleTitle" class="title-input" placeholder="无标题文章">
         </div>
         <textarea id="mdEditor" class="md-editor" spellcheck="false" placeholder="在此输入 Markdown…&#10;&#10;# 标题&#10;正文段落&#10;&#10;> 引用&#10;&#10;```js&#10;code&#10;```"></textarea>
         <div class="pane-footer">
           <span id="wordCount" class="muted small">0 字</span>
-          <span id="saveStatus" class="muted small">未保存</span>
+          <span id="saveStatus" class="muted small"><span class="save-dot"></span>未保存</span>
         </div>
       </main>
 
-      <section class="preview-pane">
+      <section class="preview-pane panel">
         <div class="pane-header">
           <span class="pane-title">公众号预览</span>
-          <span id="previewThemeName" class="muted small"></span>
+          <span id="previewThemeName" class="muted small" style="margin-left:auto"></span>
         </div>
         <div class="preview-scroll">
-          <div id="preview" class="preview-content"></div>
+          <div class="preview-content-wrap">
+            <div id="preview" class="article-shell"></div>
+            <p class="preview-tip">预览即最终粘贴效果 · 所有样式已内联</p>
+          </div>
         </div>
       </section>
     </div>
   </div>
 
   <div id="themeModal" class="modal hidden">
-    <div class="modal-card">
+    <div class="modal-card modal-card-wide">
       <div class="modal-header">
         <h3>编辑样式</h3>
-        <button class="btn btn-icon modal-close" data-close>✕</button>
+        <button class="btn btn-icon modal-close" data-close aria-label="关闭">✕</button>
       </div>
       <div class="modal-body" id="themeForm"></div>
-      <div class="modal-footer">
-        <input id="themeNameInput" class="input" placeholder="主题名称">
-        <button id="saveThemeBtn" class="btn btn-primary">保存主题</button>
+      <div class="modal-footer theme-footer">
+        <label class="keep-decor"><input type="checkbox" id="keepDecor" checked><span>保留主题装饰</span></label>
+        <button id="resetStyleBtn" class="btn">恢复默认</button>
+        <button id="cancelEditBtn" class="btn">取消</button>
+        <input id="themeNameInput" class="input theme-name" placeholder="主题名称">
+        <button id="saveThemeBtn" class="btn btn-primary">保存为主题</button>
       </div>
     </div>
   </div>
 
   <div id="imageModal" class="modal hidden">
     <div class="modal-card">
-      <div class="modal-header"><h3>插入图片</h3><button class="btn btn-icon modal-close" data-close>✕</button></div>
+      <div class="modal-header"><h3>插入图片</h3><button class="btn btn-icon modal-close" data-close aria-label="关闭">✕</button></div>
       <div class="modal-body">
-        <div class="seg-tabs">
-          <button class="seg active" data-imgtab="upload">本地上传</button>
-          <button class="seg" data-imgtab="url">图片URL</button>
-          <button class="seg" data-imgtab="library">素材库</button>
+        <div class="seg seg-tabs">
+          <button class="on" data-imgtab="upload">本地上传</button>
+          <button data-imgtab="url">图片 URL</button>
+          <button data-imgtab="library">素材库</button>
         </div>
         <div class="img-tab-panel" data-imgpanel="upload">
           <div id="dropZone" class="drop-zone">
@@ -119,8 +144,15 @@
 
   <div id="settingsModal" class="modal hidden">
     <div class="modal-card">
-      <div class="modal-header"><h3>设置</h3><button class="btn btn-icon modal-close" data-close>✕</button></div>
+      <div class="modal-header"><h3>设置</h3><button class="btn btn-icon modal-close" data-close aria-label="关闭">✕</button></div>
       <div class="modal-body">
+        <div class="field"><label>界面外观</label>
+          <select id="uiModeSelect" class="input">
+            <option value="auto">跟随系统</option>
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select>
+        </div>
         <div class="field"><label>图床服务</label>
           <select id="imageHostSelect" class="input">
             <option value="catbox">Catbox（免登录）</option>
@@ -138,8 +170,8 @@
             <div class="field"><label>Token 请求头</label><input id="customTokenHeader" class="input" placeholder="Authorization"></div>
           </div>
           <div class="field"><label>Token（可选）</label><input id="customToken" class="input" placeholder="留空则不发送认证头"></div>
-          <div class="field"><label>响应 URL 路径</label><input id="customResponsePath" class="input" placeholder="data.url（留空自动识别或取纯文本）"></div>
-          <div class="field"><label>额外表单字段（可选，每行 key=value）</label><textarea id="customExtraFields" class="input" style="height:auto;min-height:56px;padding:8px 10px;line-height:1.5;resize:vertical;" placeholder="token=xxx&#10;type=image"></textarea></div>
+          <div class="field"><label>响应 URL 路径</label><input id="customResponsePath" class="input" placeholder="data.url（留空自动识别）"></div>
+          <div class="field"><label>额外表单字段（每行 key=value）</label><textarea id="customExtraFields" class="input" style="height:auto;min-height:56px;padding:8px 10px;line-height:1.5;resize:vertical;" placeholder="token=xxx&#10;type=image"></textarea></div>
         </div>
         <div class="field row"><label>自动保存</label><input id="autoSaveToggle" type="checkbox"></div>
         <div class="field"><label>数据目录</label><div id="settingsDataDir" class="muted small"></div></div>
@@ -149,7 +181,7 @@
     </div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast"></div>
 
   <script src="lib/markdown-it.min.js"></script>
   <script src="lib/highlight.min.js"></script>

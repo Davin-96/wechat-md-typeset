@@ -4,6 +4,11 @@ const fs = require('fs');
 const Store = require('./store');
 const { uploadImage } = require('./image-upload');
 
+// 开发验证专用：仅在设置 WB_DEBUG 环境变量时开启 CDP，生产运行不生效
+if (process.env.WB_DEBUG) {
+  try { app.commandLine.appendSwitch('remote-debugging-port', process.env.WB_DEBUG); } catch (e) {}
+}
+
 let store;
 
 function getDataDir() {

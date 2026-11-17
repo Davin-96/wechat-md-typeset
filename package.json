@@ -1,17 +1,19 @@
 {
   "name": "wechat-md-editor",
-  "version": "1.0.0",
-  "description": "Markdown 转微信公众号排版工具",
+  "version": "2.0.0",
+  "description": "Markdown 转微信公众号排版工具 · 50 套主题 · 苹果风界面",
   "main": "src/main/main.js",
-  "author": "",
+  "author": "阿文",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win portable"
+    "dist": "electron-builder --win",
+    "dist:portable": "electron-builder --win portable",
+    "dist:nsis": "electron-builder --win nsis"
   },
   "build": {
     "appId": "com.qoder.wechatmd",
-    "productName": "WeChatMD",
+    "productName": "公众号排版工具",
     "directories": {
       "output": "out"
     },
@@ -19,23 +21,31 @@
       "src/**/*",
       "package.json"
     ],
+    "electronDist": "node_modules/electron/dist",
     "win": {
       "target": [
-        "portable",
-        "zip"
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
       ],
       "icon": "build/icon.ico"
     },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "公众号排版工具",
+      "installerLanguages": ["zh_CN"],
+      "language": "2052",
+      "artifactName": "公众号排版工具-安装版-v${version}.exe"
+    },
     "portable": {
-      "artifactName": "公众号排版工具-便携版.exe"
+      "artifactName": "公众号排版工具-便携版-v${version}.exe"
     }
   },
   "devDependencies": {
-    "@highlightjs/cdn-assets": "^11.12.0",
     "electron": "^45.2.3",
-    "electron-builder": "^26.18.0",
-    "markdown-it": "^15.0.3",
-    "png-to-ico": "^3.0.2",
-    "sharp": "^0.35.5"
+    "electron-builder": "^26.18.0"
   }
 }

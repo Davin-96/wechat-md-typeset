@@ -1,11 +1,10 @@
+/* ===== 主逻辑：完整功能 + 50 主题统一管理 + 基于主题的样式编辑 ===== */
 (function () {
   'use strict';
-
-  // ===== API layer (Electron IPC or browser fallback) =====
   const api = window.api;
-
-  // ===== DOM refs =====
   const $ = (id) => document.getElementById(id);
+  const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
   const editThemeBtn = $('editThemeBtn'), insertImageBtn = $('insertImageBtn'),
     copyBtn = $('copyBtn'), exportBtn = $('exportBtn'), settingsBtn = $('settingsBtn'),
     newArticleBtn = $('newArticleBtn'), newThemeBtn = $('newThemeBtn'), uploadImageBtn = $('uploadImageBtn'),
@@ -17,20 +16,43 @@
     imageUrlInput = $('imageUrlInput'), insertUrlBtn = $('insertUrlBtn'), imagePickerList = $('imagePickerList'),
     settingsModal = $('settingsModal'), imageHostSelect = $('imageHostSelect'), smmsToken = $('smmsToken'),
     imgbbKey = $('imgbbKey'), autoSaveToggle = $('autoSaveToggle'), settingsDataDir = $('settingsDataDir'), saveSettingsBtn = $('saveSettingsBtn'),
-    uiModeBtn = $('uiModeBtn'), toastEl = $('toast');
+    uiModeBtn = $('uiModeBtn'), uiModeSelect = $('uiModeSelect'), toastEl = $('toast'),
+    themeSearch = $('themeSearch'), styleSeg = $('styleSeg'), themeChips = $('themeChips');
 
-  // ===== State =====
   const clone = (o) => JSON.parse(JSON.stringify(o));
-  const defaultConfig = clone(THEMES.builtinConfigs[0]);
+  function cloneConfig(c) {
+    if (!c) return c;
+    const d = c.decor;
+    const out = clone(c);
+    if (d) out.decor = d;
+    return out;
+  }
+  function serializeConfig(cfg) {
+    const out = {};
+    Object.keys(cfg).forEach(k => { if (k !== 'decor' && typeof cfg[k] !== 'function') out[k] = cfg[k]; });
+    return out;
+  }
+  const defaultConfig = cloneConfig(THEMES.builtinConfigs[0]);
   const state = {
-    article: null, config: clone(defaultConfig), currentThemeId: 'moyu',
+    article: null, config: cloneConfig(defaultConfig), currentThemeId: null,
     articles: [], customThemes: [], images: [], settings: null,
-    editingTheme: null, editingThemeId: null,
+    editing: false, editingConfig: null, editingBaseId: null, editingThemeId: null, editingDecorRef: null, configBeforeEdit: null,
+    currentGroup: '全部', currentStyle: 'all', searchKey: '',
     saveTimer: null, renderTimer: null, isDirty: false
   };
-  const allThemes = () => THEMES.builtinThemes.concat(state.customThemes);
+  function allThemes() {
+    const custom = state.customThemes.map(c => {
+      const cfg = Object.assign({}, c.config || {});
+      if (c.decorRef) {
+        const base = THEMES.builtinThemes.find(t => t.id === c.decorRef);
+        if (base && base.config.decor) cfg.decor = Object.assign({}, base.config.decor, cfg.decor || {});
+      }
+      return { id: c.id, name: c.name, group: c.group || '自定义', style: c.style || 'modern', builtin: false, custom: true, config: cfg };
+    });
+    return THEMES.builtinThemes.concat(custom);
+  }
+  function getTheme(id) { return allThemes().find(t => t.id === id); }
 
-  // ===== Utilities =====
   let toastTimer;
   function toast(msg) {
     toastEl.textContent = msg; toastEl.classList.remove('hidden');
@@ -44,22 +66,40 @@
   function openModal(id) { $(id).classList.remove('hidden'); }
   function closeModal(id) { $(id).classList.add('hidden'); }
 
+  // ===== 明暗：跟随系统 + 手动 =====
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  function applyUIMode() {
+    const mode = localStorage.getItem('ui-mode') || 'auto';
+    document.documentElement.setAttribute('data-ui-mode', mode);
+    const dark = mode === 'dark' || (mode === 'auto' && media.matches);
+    document.documentElement.setAttribute('data-ui', dark ? 'dark' : 'light');
+    if (uiModeSelect) uiModeSelect.value = mode;
+    if (uiModeBtn) uiModeBtn.textContent = dark ? '☀' : '☾';
+  }
+  function setUIMode(mode) { localStorage.setItem('ui-mode', mode); applyUIMode(); }
+  if (media.addEventListener) media.addEventListener('change', () => { if ((localStorage.getItem('ui-mode') || 'auto') === 'auto') applyUIMode(); });
+
   // ===== Render =====
+  function activeConfig() { return state.editing && state.editingConfig ? state.editingConfig : state.config; }
   function render() {
-    const r = Engine.render(mdEditor.value, state.config);
-    preview.innerHTML = r.html;
-    const t = allThemes().find(x => x.id === state.currentThemeId);
-    previewThemeName.textContent = t ? t.name : '自定义样式';
+    if (!mdEditor.value.trim()) {
+      preview.innerHTML = '<div class="preview-empty"><div class="pe-icon">✎</div><div class="pe-title">开始写作吧</div><div class="pe-sub">在左侧输入 Markdown，这里会实时显示公众号排版效果</div></div>';
+    } else {
+      const r = Engine.render(mdEditor.value, activeConfig());
+      preview.innerHTML = r.html;
+    }
+    const t = getTheme(state.currentThemeId);
+    previewThemeName.textContent = (state.editing ? '编辑中 · ' : '') + (t ? t.name : (state.currentThemeId ? '自定义样式' : ''));
     wordCount.textContent = (mdEditor.value.replace(/\s/g, '').length) + ' 字';
   }
   function onEditorInput() {
     state.isDirty = true; saveStatus.textContent = '未保存';
-    clearTimeout(state.renderTimer); state.renderTimer = setTimeout(render, 120);
+    clearTimeout(state.renderTimer); state.renderTimer = setTimeout(() => { if (!state.editing) render(); }, 120);
     scheduleSave();
   }
   function markDirty() { state.isDirty = true; saveStatus.textContent = '未保存'; scheduleSave(); }
   function scheduleSave() {
-    if (!state.settings || !state.settings.autoSave) return;
+    if (!state.settings || !state.settings.autoSave || state.editing) return;
     clearTimeout(state.saveTimer); state.saveTimer = setTimeout(saveCurrentArticle, 800);
   }
 
@@ -68,7 +108,7 @@
     if (!state.article) state.article = {};
     state.article.title = articleTitle.value || '无标题文章';
     state.article.content = mdEditor.value;
-    state.article.config = clone(state.config);
+    state.article.config = serializeConfig(state.config);
     state.article.themeId = state.currentThemeId;
     const saved = await api.saveArticle(state.article);
     state.article = saved;
@@ -81,8 +121,9 @@
     if (state.isDirty) await saveCurrentArticle();
     const a = await api.getArticle(id); if (!a) return;
     state.article = a;
-    state.config = a.config ? clone(a.config) : clone(defaultConfig);
     state.currentThemeId = a.themeId || null;
+    const base = getTheme(state.currentThemeId);
+    state.config = base ? Object.assign(cloneConfig(base.config), a.config || {}) : cloneConfig(a.config || defaultConfig);
     articleTitle.value = a.title === '无标题文章' ? '' : (a.title || '');
     mdEditor.value = a.content || '';
     render(); renderThemeList();
@@ -90,8 +131,9 @@
     renderArticleList();
   }
   function newArticle() {
-    state.article = { title: '', content: '', config: clone(defaultConfig) };
-    state.config = clone(defaultConfig); state.currentThemeId = 'moyu';
+    state.article = { title: '', content: '', config: {} };
+    state.currentThemeId = getTheme('linear') ? 'linear' : THEMES.builtinThemes[0].id;
+    state.config = cloneConfig(getTheme(state.currentThemeId).config);
     articleTitle.value = ''; mdEditor.value = '';
     render(); renderThemeList();
     saveStatus.textContent = '未保存'; state.isDirty = false;
@@ -110,7 +152,7 @@
     if (!state.articles.length) { articleList.innerHTML = '<div class="list-empty">暂无文章<br>点击上方新建</div>'; return; }
     for (const a of state.articles) {
       const item = document.createElement('div');
-      item.className = 'list-item' + (state.article && state.article.id === a.id ? ' active' : '');
+      item.className = 'list-item' + (state.article && state.article.id === a.id ? ' on' : '');
       const title = document.createElement('div'); title.className = 'list-item-title'; title.textContent = a.title || '无标题文章';
       const meta = document.createElement('div'); meta.className = 'list-item-meta';
       meta.textContent = formatDate(a.updatedAt) + ' · ' + (a.content || '').replace(/\s/g, '').length + '字';
@@ -123,149 +165,212 @@
     }
   }
 
-  // ===== Themes =====
-  function styleCss(o) {
-    return Object.keys(o).map(k => k.replace(/[A-Z]/g, c => '-' + c.toLowerCase()) + ':' + o[k]).join(';');
+  // ===== 主题缩略图 =====
+  function themeThumb(c) {
+    const accent = c.accent, bg = c.bg || '#fff', text = c.textColor || '#333';
+    const font = (THEMES.fontFamilies[c.font] || '').split(',')[0];
+    let titleStyle = `color:${text};font-family:${font};font-size:12px`;
+    const h1 = c.h1Style, h2 = c.h2Style;
+    if (h1 === 'block' || h1 === 'gradient') titleStyle = `color:#fff;background:${accent};padding:3px 6px;border-radius:3px;font-family:${font};font-size:11px`;
+    else if (h1 === 'underline') titleStyle = `color:${accent};border-bottom:2px solid ${accent};font-family:${font};font-size:12px`;
+    else if (h1 === 'outline') titleStyle = `color:${text};border:1px solid ${accent};padding:2px 6px;border-radius:3px;font-family:${font};font-size:11px`;
+    else if (h1 === 'leftborder') titleStyle = `color:${text};border-left:3px solid ${accent};padding-left:5px;font-family:${font};font-size:11px`;
+    else if (h1 === 'serifBig') titleStyle = `color:${text};font-family:Georgia,serif;font-size:12px;letter-spacing:1px`;
+    let h2Css = `font-size:8px;color:${accent};font-weight:700`;
+    if (h2 === 'leftborder') h2Css = `font-size:8px;color:${text};border-left:2px solid ${accent};padding-left:4px;font-weight:700`;
+    if (h2 === 'block') h2Css = `font-size:8px;color:#fff;background:${accent};padding:2px 4px;border-radius:2px;display:inline-block;font-weight:700`;
+    if (c.decor && c.decor.h2Deco) h2Css = `font-size:8px;color:${accent};font-weight:700;letter-spacing:1px`;
+    const dark = c.dark;
+    const lineColor = dark ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.15)';
+    const quoteBorder = c.quoteStyle === 'none' ? 'none' : `border-left:2px solid ${accent}`;
+    return `<div class="theme-thumb" style="background:${bg}">
+      <div style="${titleStyle};line-height:1.3;white-space:nowrap;overflow:hidden">标题样式</div>
+      <div style="${h2Css};margin:2px 0">小标题</div>
+      <div class="tt-line" style="background:${lineColor};width:90%;height:4px;border-radius:2px;opacity:.5"></div>
+      <div class="tt-line" style="background:${lineColor};width:72%;height:4px;border-radius:2px;opacity:.5"></div>
+      <div style="${quoteBorder};padding:1px 0 1px 5px;background:${c.quoteBg || (dark ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.03)')};font-size:7px;color:${text};opacity:.8;margin-top:2px">引用样式</div>
+    </div>`;
   }
-  function buildThumb(t) {
-    const c = t.config;
-    const st = THEMES.buildTheme(c);
-    const thumb = document.createElement('div');
-    thumb.className = 'theme-thumb';
-    thumb.style.background = st.container.backgroundColor;
-    if (c.bgImage) { thumb.style.backgroundImage = 'url(' + c.bgImage + ')'; thumb.style.backgroundSize = 'cover'; }
-    const h1 = document.createElement('div');
-    h1.style.cssText = styleCss(Object.assign({}, st.h1, { fontSize: '11px', margin: '0', padding: '3px 8px', lineHeight: '1.35', boxShadow: 'none' }));
-    h1.textContent = '标题样式';
-    thumb.appendChild(h1);
-    const lineColor = c.dark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.13)';
-    for (const w of ['86%', '62%']) {
-      const ln = document.createElement('div');
-      ln.style.cssText = 'height:4px;border-radius:2px;background:' + lineColor + ';width:' + w + ';flex:none';
-      thumb.appendChild(ln);
-    }
-    const q = document.createElement('div');
-    q.style.cssText = styleCss(Object.assign({}, st.blockquote, { fontSize: '9px', padding: '4px 7px', margin: '2px 0 0', boxShadow: 'none', lineHeight: '1.4' }));
-    q.textContent = '引用示例';
-    thumb.appendChild(q);
-    return thumb;
+
+  // ===== 主题筛选 =====
+  function styleFiltered(list) { return state.currentStyle === 'all' ? list : list.filter(t => t.style === state.currentStyle); }
+  function renderStyleSeg() {
+    const all = allThemes();
+    const counts = { all: all.length, modern: all.filter(t => t.style === 'modern').length, special: all.filter(t => t.style === 'special').length };
+    $$('#styleSeg button').forEach(b => {
+      const n = b.querySelector('span'); if (n) n.textContent = counts[b.dataset.style];
+      b.classList.toggle('on', b.dataset.style === state.currentStyle);
+    });
   }
+  function renderChips() {
+    renderStyleSeg();
+    const groups = THEMES.groups.concat(['自定义']);
+    const pool = styleFiltered(allThemes());
+    themeChips.innerHTML = groups.map(g => {
+      const count = g === '全部' ? pool.length : pool.filter(t => t.group === g).length;
+      return `<button class="chip ${g === state.currentGroup ? 'on' : ''}" data-group="${g}">${g} <span class="chip-num">${count}</span></button>`;
+    }).join('');
+    $$('.chip').forEach(c => c.addEventListener('click', () => {
+      state.currentGroup = c.dataset.group;
+      $$('.chip').forEach(x => x.classList.toggle('on', x === c));
+      renderThemeList();
+    }));
+  }
+
   function applyTheme(id) {
-    const t = allThemes().find(x => x.id === id); if (!t) return;
-    state.config = clone(t.config); state.currentThemeId = id;
+    if (state.editing) cancelEdit(true);
+    const t = getTheme(id); if (!t) return;
+    state.config = cloneConfig(t.config); state.currentThemeId = id;
     render(); renderThemeList(); markDirty();
   }
   function renderThemeList() {
+    const themes = styleFiltered(allThemes()).filter(t =>
+      (state.currentGroup === '全部' || t.group === state.currentGroup) &&
+      (!state.searchKey || t.name.toLowerCase().indexOf(state.searchKey) >= 0));
     themeList.innerHTML = '';
-    for (const t of allThemes()) {
+    if (!themes.length) { themeList.innerHTML = '<div class="list-empty">没有匹配的主题<br>换个关键词试试</div>'; return; }
+    const meta = document.createElement('div'); meta.className = 'theme-meta'; meta.textContent = '共 ' + themes.length + ' 套 · 双击卡片可编辑';
+    themeList.appendChild(meta);
+    const grid = document.createElement('div'); grid.className = 'theme-grid';
+    for (const t of themes) {
       const card = document.createElement('div');
-      card.className = 'theme-card' + (state.currentThemeId === t.id ? ' active' : '');
-      card.appendChild(buildThumb(t));
+      card.className = 'theme-card' + (state.currentThemeId === t.id && !state.editing ? ' on' : '');
+      card.dataset.id = t.id; card.title = '单击应用 · 双击编辑';
+      card.innerHTML = themeThumb(t.config);
       const bar = document.createElement('div'); bar.className = 'theme-card-bar';
       const name = document.createElement('div'); name.className = 'theme-card-name'; name.textContent = t.name; name.title = t.name;
       bar.appendChild(name);
-      if (t.builtin) {
-        const tag = document.createElement('span'); tag.className = 'theme-card-tag'; tag.textContent = '内置';
-        bar.appendChild(tag);
-      } else {
-        const acts = document.createElement('div'); acts.className = 'theme-card-actions';
-        const ed = document.createElement('button'); ed.textContent = '✎'; ed.title = '编辑';
-        ed.addEventListener('click', (e) => { e.stopPropagation(); openThemeEditor(t.id); });
-        const del = document.createElement('button'); del.className = 'theme-del'; del.textContent = '✕'; del.title = '删除';
-        del.addEventListener('click', (e) => { e.stopPropagation(); deleteTheme(t.id); });
-        acts.appendChild(ed); acts.appendChild(del); bar.appendChild(acts);
-        card.addEventListener('dblclick', () => openThemeEditor(t.id));
+      const tools = document.createElement('span'); tools.className = 'card-tools';
+      const ed = document.createElement('button'); ed.className = 'card-tool card-edit'; ed.textContent = '✎'; ed.title = '基于此主题编辑';
+      ed.addEventListener('click', e => { e.stopPropagation(); openThemeEditor(t.id); });
+      tools.appendChild(ed);
+      if (t.custom) {
+        const del = document.createElement('button'); del.className = 'card-tool card-del'; del.textContent = '✕'; del.title = '删除自定义主题';
+        del.addEventListener('click', e => { e.stopPropagation(); deleteTheme(t.id); });
+        tools.appendChild(del);
       }
-      card.appendChild(bar);
+      bar.appendChild(tools); card.appendChild(bar);
       card.addEventListener('click', () => applyTheme(t.id));
-      themeList.appendChild(card);
+      card.addEventListener('dblclick', e => { e.stopPropagation(); openThemeEditor(t.id); });
+      grid.appendChild(card);
     }
-  }
-  async function deleteTheme(id) {
-    await api.deleteTheme(id);
-    state.customThemes = state.customThemes.filter(t => t.id !== id);
-    if (state.currentThemeId === id) state.currentThemeId = null;
-    renderThemeList(); toast('已删除主题');
+    themeList.appendChild(grid);
   }
 
-  // ===== Theme editor =====
-  const themeFormSchema = [
+  async function deleteTheme(id) {
+    const rec = state.customThemes.find(t => t.id === id);
+    if (!rec || !confirm('删除自定义主题「' + rec.name + '」？')) return;
+    await api.deleteTheme(id);
+    state.customThemes = state.customThemes.filter(t => t.id !== id);
+    if (state.currentThemeId === id) {
+      state.currentThemeId = THEMES.builtinThemes[0].id;
+      state.config = cloneConfig(getTheme(state.currentThemeId).config);
+    }
+    renderChips(); renderThemeList(); render(); toast('主题已删除');
+  }
+
+  // ===== 编辑样式 =====
+  const formSchema = [
     { group: '全局', fields: [
-      { key: 'accent', label: '主题色', type: 'color', def: '#4caf50' },
-      { key: 'bg', label: '背景色', type: 'color', def: '#ffffff' },
+      { key: 'accent', label: '主题色', type: 'color' },
+      { key: 'bg', label: '背景色', type: 'color' },
+      { key: 'textColor', label: '正文色', type: 'color' },
       { key: 'bgImage', label: '背景图 URL', type: 'text', full: true },
-      { key: 'textColor', label: '正文色', type: 'color', def: '#3f3f3f' },
-      { key: 'fontSize', label: '字号', type: 'select', options: THEMES.options.fontSize, def: '16px' },
-      { key: 'lineHeight', label: '行距', type: 'select', options: THEMES.options.lineHeight, def: '1.75' },
-      { key: 'font', label: '字体', type: 'select', options: THEMES.options.font, def: 'sans', full: true }
+      { key: 'fontSize', label: '字号', type: 'select', options: THEMES.options.fontSize },
+      { key: 'lineHeight', label: '行距', type: 'select', options: THEMES.options.lineHeight },
+      { key: 'font', label: '字体', type: 'select', options: THEMES.options.font }
     ]},
     { group: '标题与区块', fields: [
-      { key: 'h1Style', label: 'H1 样式', type: 'select', options: THEMES.options.h1Style, def: 'plain' },
-      { key: 'h2Style', label: 'H2 样式', type: 'select', options: THEMES.options.h2Style, def: 'underline' },
-      { key: 'codeTheme', label: '代码主题', type: 'select', options: THEMES.options.codeTheme, def: 'atom-one-dark', full: true },
+      { key: 'h1Style', label: 'H1 样式', type: 'select', options: THEMES.options.h1Style },
+      { key: 'h2Style', label: 'H2 样式', type: 'select', options: THEMES.options.h2Style },
+      { key: 'quoteStyle', label: '引用样式', type: 'select', options: THEMES.options.quoteStyle },
       { key: 'quoteBg', label: '引用背景', type: 'color' },
-      { key: 'quoteStyle', label: '引用样式', type: 'select', options: THEMES.options.quoteStyle, def: 'default' },
-      { key: 'imgRadius', label: '图片圆角', type: 'select', options: THEMES.options.imgRadius, def: '8px' },
-      { key: 'thColor', label: '表头色', type: 'color', full: true }
+      { key: 'imgRadius', label: '图片圆角', type: 'select', options: THEMES.options.imgRadius },
+      { key: 'thColor', label: '表头色', type: 'color' },
+      { key: 'codeTheme', label: '代码主题', type: 'select', options: THEMES.options.codeTheme, full: true }
     ]}
   ];
+  function colorVal(v, fallback) { return /^#[0-9a-f]{6}$/i.test(v || '') ? v : (fallback || '#ffffff'); }
   function buildThemeForm(config) {
     themeForm.innerHTML = '';
-    for (const group of themeFormSchema) {
-      const g = document.createElement('div'); g.className = 'form-group';
-      const t = document.createElement('div'); t.className = 'form-group-title'; t.textContent = group.group; g.appendChild(t);
+    formSchema.forEach(grp => {
+      const sec = document.createElement('div'); sec.className = 'form-group';
+      const t = document.createElement('div'); t.className = 'form-group-title'; t.textContent = grp.group; sec.appendChild(t);
       const grid = document.createElement('div'); grid.className = 'form-grid';
-      for (const f of group.fields) {
+      grp.fields.forEach(f => {
         const field = document.createElement('div'); field.className = 'field' + (f.full ? ' full' : '');
         const label = document.createElement('label'); label.textContent = f.label; field.appendChild(label);
         let input;
         if (f.type === 'select') {
           input = document.createElement('select'); input.className = 'input';
-          for (const opt of f.options) {
+          f.options.forEach(opt => {
             const o = document.createElement('option');
             if (typeof opt === 'string') { o.value = opt; o.textContent = opt; }
             else { o.value = opt.value; o.textContent = opt.label; }
             input.appendChild(o);
-          }
-          input.value = config[f.key] || f.def || '';
+          });
+          input.value = config[f.key] != null ? config[f.key] : (typeof f.options[0] === 'string' ? f.options[0] : f.options[0].value);
         } else if (f.type === 'color') {
-          input = document.createElement('input'); input.type = 'color';
-          input.value = config[f.key] || (f.key === 'quoteBg' || f.key === 'thColor' ? (config.accent || '#4caf50') : (f.def || '#000000'));
+          input = document.createElement('input'); input.type = 'color'; input.className = 'input color-input';
+          input.value = colorVal(config[f.key], f.key === 'bg' ? '#ffffff' : (f.key === 'textColor' ? '#333333' : config.accent));
         } else {
-          input = document.createElement('input'); input.type = 'text'; input.className = 'input'; input.value = config[f.key] || '';
+          input = document.createElement('input'); input.type = 'text'; input.className = 'input';
+          input.value = config[f.key] || ''; input.placeholder = '可选';
         }
         input.dataset.key = f.key;
-        input.addEventListener('input', () => {
-          state.editingTheme[f.key] = input.value;
-          state.config = clone(state.editingTheme);
-          state.currentThemeId = null;
-          renderThemeList(); render(); markDirty();
-        });
+        input.addEventListener('input', () => { state.editingConfig[f.key] = input.value; render(); });
         field.appendChild(input); grid.appendChild(field);
-      }
-      g.appendChild(grid); themeForm.appendChild(g);
-    }
+      });
+      sec.appendChild(grid); themeForm.appendChild(sec);
+    });
   }
   function openThemeEditor(themeId) {
-    let config = null, id = null, name = '';
-    if (themeId) {
-      const t = allThemes().find(x => x.id === themeId);
-      if (t) { config = clone(t.config); id = t.builtin ? null : t.id; name = t.name; }
-    }
-    if (!config) config = clone(state.config);
-    state.editingTheme = config; state.editingThemeId = id;
-    buildThemeForm(config); themeNameInput.value = name;
+    const t = getTheme(themeId || state.currentThemeId) || getTheme(state.currentThemeId) || THEMES.builtinThemes[0];
+    state.configBeforeEdit = cloneConfig(state.config);
+    state.editing = true;
+    state.editingConfig = cloneConfig(t.config);
+    state.editingBaseId = t.builtin ? t.id : null;
+    state.editingThemeId = t.builtin ? null : t.id;
+    state.editingDecorRef = t.custom ? (state.customThemes.find(c => c.id === t.id) || {}).decorRef : (t.config.decor ? t.id : null);
+    $('keepDecor').checked = !!state.editingConfig.decor;
+    themeNameInput.value = t.builtin ? t.name + ' · 我的版本' : t.name;
+    themeModal.querySelector('.modal-header h3').textContent = '编辑样式 · 基于「' + t.name + '」';
+    buildThemeForm(state.editingConfig);
     openModal('themeModal');
+    render(); renderThemeList();
+    toast('调整参数，右侧实时预览');
+  }
+  function cancelEdit(silent) {
+    if (!state.editing) return;
+    state.editing = false; state.editingConfig = null;
+    state.editingBaseId = null; state.editingThemeId = null; state.editingDecorRef = null;
+    if (state.configBeforeEdit) state.config = state.configBeforeEdit;
+    closeModal('themeModal'); renderThemeList(); render();
+    if (!silent) toast('已放弃修改');
   }
   async function saveTheme() {
+    if (!state.editing || !state.editingConfig) return;
     const name = themeNameInput.value.trim() || '未命名主题';
-    const theme = { id: state.editingThemeId || undefined, name: name, config: clone(state.editingTheme) };
+    const keepDecor = $('keepDecor').checked;
+    const cfg = serializeConfig(state.editingConfig);
+    if (!keepDecor) delete cfg.decor;
+    const theme = { id: state.editingThemeId || undefined, name: name, config: cfg, decorRef: keepDecor ? state.editingDecorRef : null };
     const saved = await api.saveTheme(theme);
     const i = state.customThemes.findIndex(t => t.id === saved.id);
     if (i >= 0) state.customThemes[i] = saved; else state.customThemes.push(saved);
-    state.config = clone(saved.config); state.currentThemeId = saved.id;
-    renderThemeList(); render();
-    closeModal('themeModal'); toast('主题已保存'); markDirty();
+    state.editing = false; state.editingConfig = null;
+    state.editingBaseId = null; state.editingThemeId = null; state.editingDecorRef = null;
+    state.currentThemeId = saved.id;
+    state.config = getTheme(saved.id).config;
+    closeModal('themeModal'); renderChips(); renderThemeList(); render();
+    toast('已保存为自定义主题：' + name); markDirty();
+  }
+  function resetStyle() {
+    if (!state.editing) return;
+    const base = getTheme(state.editingThemeId || state.editingBaseId);
+    if (!base) { toast('无法恢复默认'); return; }
+    state.editingConfig = cloneConfig(base.config);
+    buildThemeForm(state.editingConfig); render(); toast('已恢复为原主题参数');
   }
 
   // ===== Images =====
@@ -290,22 +395,18 @@
   }
   async function deleteImage(id) {
     await api.deleteImage(id);
-    state.images = state.images.filter(i => i.id !== id);
-    renderImageList();
+    state.images = state.images.filter(i => i.id !== id); renderImageList();
   }
   function renderImageList() {
     imageList.innerHTML = '';
-    if (!state.images.length) { imageList.innerHTML = '<div class="list-empty">暂无素材</div>'; }
-    else {
-      for (const img of state.images) {
-        const card = document.createElement('div'); card.className = 'image-card';
-        const im = document.createElement('img'); im.src = img.url; im.alt = img.name || '';
-        card.appendChild(im);
-        card.addEventListener('click', () => insertImageMarkdown(img.url));
-        const del = document.createElement('button'); del.className = 'image-del'; del.textContent = '✕';
-        del.addEventListener('click', (e) => { e.stopPropagation(); deleteImage(img.id); });
-        card.appendChild(del); imageList.appendChild(card);
-      }
+    if (!state.images.length) imageList.innerHTML = '<div class="list-empty">暂无素材</div>';
+    else for (const img of state.images) {
+      const card = document.createElement('div'); card.className = 'image-card';
+      const im = document.createElement('img'); im.src = img.url; im.alt = img.name || '';
+      card.appendChild(im); card.addEventListener('click', () => insertImageMarkdown(img.url));
+      const del = document.createElement('button'); del.className = 'image-del'; del.textContent = '✕';
+      del.addEventListener('click', e => { e.stopPropagation(); deleteImage(img.id); });
+      card.appendChild(del); imageList.appendChild(card);
     }
     renderImagePicker();
   }
@@ -314,34 +415,27 @@
     if (!state.images.length) { imagePickerList.innerHTML = '<div class="list-empty">暂无素材，请先上传</div>'; return; }
     for (const img of state.images) {
       const card = document.createElement('div'); card.className = 'image-card';
-      const im = document.createElement('img'); im.src = img.url;
-      card.appendChild(im); card.addEventListener('click', () => insertImageMarkdown(img.url));
+      const im = document.createElement('img'); im.src = img.url; card.appendChild(im);
+      card.addEventListener('click', () => insertImageMarkdown(img.url));
       imagePickerList.appendChild(card);
     }
   }
 
   // ===== Copy & Export =====
   async function copyToWechat() {
-    const r = Engine.renderForWechat(mdEditor.value, state.config);
-    try {
-      await api.writeClipboardHTML(r.html, r.text);
-      toast('已复制，去公众号后台粘贴');
-    } catch (e) {
-      toast('复制失败：' + (e && e.message ? e.message : e));
-    }
+    const r = Engine.renderForWechat(mdEditor.value, activeConfig());
+    try { await api.writeClipboardHTML(r.html, r.text); toast('已复制，去公众号后台粘贴'); }
+    catch (e) { toast('复制失败：' + (e && e.message ? e.message : e)); }
   }
   async function exportHTML() {
-    const r = Engine.render(mdEditor.value, state.config);
+    const r = Engine.render(mdEditor.value, activeConfig());
     const doc = Engine.exportDoc(r.html, articleTitle.value || '公众号文章');
-    const name = (articleTitle.value || '公众号文章') + '.html';
-    const r2 = await api.saveHTMLFile(doc, name);
-    if (r2) toast('已导出 HTML');
+    const p = await api.saveHTMLFile(doc, (articleTitle.value || '公众号文章') + '.html');
+    if (p) toast('已导出 HTML');
   }
 
   // ===== Settings =====
-  function toggleCustomFields() {
-    $('customFields').classList.toggle('hidden', imageHostSelect.value !== 'custom');
-  }
+  function toggleCustomFields() { $('customFields').classList.toggle('hidden', imageHostSelect.value !== 'custom'); }
   async function openSettings() {
     imageHostSelect.value = state.settings.imageHost;
     smmsToken.value = state.settings.smmsToken || '';
@@ -376,7 +470,7 @@
   function bindEvents() {
     mdEditor.addEventListener('input', onEditorInput);
     articleTitle.addEventListener('input', markDirty);
-    mdEditor.addEventListener('keydown', (e) => {
+    mdEditor.addEventListener('keydown', e => {
       if (e.key === 'Tab') {
         e.preventDefault();
         const s = mdEditor.selectionStart, en = mdEditor.selectionEnd;
@@ -384,19 +478,23 @@
         mdEditor.selectionStart = mdEditor.selectionEnd = s + 2; onEditorInput();
       }
     });
-    document.addEventListener('keydown', (e) => {
+    document.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveCurrentArticle(); toast('已保存'); }
     });
-
     uiModeBtn.addEventListener('click', () => {
-      const m = document.documentElement.getAttribute('data-ui') === 'dark' ? 'light' : 'dark';
-      document.documentElement.setAttribute('data-ui', m);
-      try { localStorage.setItem('uiMode', m); } catch (e) {}
-      uiModeBtn.textContent = m === 'dark' ? '☀' : '☾';
+      const cur = document.documentElement.getAttribute('data-ui');
+      setUIMode(cur === 'dark' ? 'light' : 'dark');
     });
-    editThemeBtn.addEventListener('click', () => openThemeEditor());
-    newThemeBtn.addEventListener('click', () => openThemeEditor());
+    if (uiModeSelect) uiModeSelect.addEventListener('change', e => setUIMode(e.target.value));
+    editThemeBtn.addEventListener('click', () => openThemeEditor(state.currentThemeId));
+    newThemeBtn.addEventListener('click', () => openThemeEditor(state.currentThemeId));
     saveThemeBtn.addEventListener('click', saveTheme);
+    $('resetStyleBtn').addEventListener('click', resetStyle);
+    $('cancelEditBtn').addEventListener('click', () => cancelEdit(false));
+    themeSearch.addEventListener('input', e => { state.searchKey = e.target.value.trim().toLowerCase(); renderThemeList(); });
+    $$('#styleSeg button').forEach(b => b.addEventListener('click', () => {
+      state.currentStyle = b.dataset.style; renderChips(); renderThemeList();
+    }));
     newArticleBtn.addEventListener('click', newArticle);
     insertImageBtn.addEventListener('click', () => { openModal('imageModal'); switchImageTab('upload'); });
     copyBtn.addEventListener('click', copyToWechat);
@@ -405,32 +503,27 @@
     saveSettingsBtn.addEventListener('click', saveSettings);
     imageHostSelect.addEventListener('change', toggleCustomFields);
 
-    // sidebar tabs
-    document.querySelectorAll('.sidebar-tabs .tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        document.querySelectorAll('.sidebar-tabs .tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-        document.querySelector('[data-panel="' + tab.dataset.tab + '"]').classList.remove('hidden');
-      });
-    });
-
-    // image modal tabs
-    document.querySelectorAll('[data-imgtab]').forEach(seg => {
-      seg.addEventListener('click', () => switchImageTab(seg.dataset.imgtab));
-    });
+    $$('.top-seg button').forEach(b => b.addEventListener('click', () => {
+      $$('.top-seg button').forEach(x => x.classList.toggle('on', x === b));
+      const map = { edit: 'articles', themes: 'themes', assets: 'images' };
+      const tab = document.querySelector('.sidebar-tabs .tab[data-tab="' + map[b.dataset.view] + '"]');
+      if (tab) tab.click();
+    }));
+    $$('.sidebar-tabs .tab').forEach(tab => tab.addEventListener('click', () => {
+      $$('.sidebar-tabs .tab').forEach(t => t.classList.toggle('on', t === tab));
+      $$('.tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== tab.dataset.tab));
+    }));
+    $$('[data-imgtab]').forEach(seg => seg.addEventListener('click', () => switchImageTab(seg.dataset.imgtab)));
     function switchImageTab(name) {
-      document.querySelectorAll('[data-imgtab]').forEach(s => s.classList.toggle('active', s.dataset.imgtab === name));
-      document.querySelectorAll('[data-imgpanel]').forEach(p => p.classList.toggle('hidden', p.dataset.imgpanel !== name));
+      $$('[data-imgtab]').forEach(s => s.classList.toggle('on', s.dataset.imgtab === name));
+      $$('[data-imgpanel]').forEach(p => p.classList.toggle('hidden', p.dataset.imgpanel !== name));
       if (name === 'library') renderImagePicker();
     }
-
-    // drop zone
     dropZone.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleUpload(fileInput.files[0], true); fileInput.value = ''; });
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', (e) => {
+    dropZone.addEventListener('drop', e => {
       e.preventDefault(); dropZone.classList.remove('dragover');
       if (e.dataTransfer.files[0]) handleUpload(e.dataTransfer.files[0], true);
     });
@@ -439,35 +532,29 @@
       if (!url) { toast('请输入图片 URL'); return; }
       insertImageMarkdown(url); imageUrlInput.value = '';
     });
-
-    // sidebar library upload (no insert)
     const libraryInput = document.createElement('input');
     libraryInput.type = 'file'; libraryInput.accept = 'image/*'; libraryInput.hidden = true;
     document.body.appendChild(libraryInput);
     libraryInput.addEventListener('change', () => { if (libraryInput.files[0]) handleUpload(libraryInput.files[0], false); libraryInput.value = ''; });
     uploadImageBtn.addEventListener('click', () => libraryInput.click());
 
-    // modal close
-    document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
-      b.closest('.modal').classList.add('hidden');
-    }));
-    document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', (e) => { if (e.target === m) m.classList.add('hidden'); }));
+    $$('[data-close]').forEach(b => b.addEventListener('click', () => { b.closest('.modal').classList.add('hidden'); if (state.editing) cancelEdit(true); }));
+    $$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) { m.classList.add('hidden'); if (state.editing) cancelEdit(true); } }));
   }
 
   // ===== Init =====
   async function init() {
+    applyUIMode();
     state.settings = await api.getSettings();
     state.customThemes = await api.getThemes();
     state.articles = await api.listArticles();
     state.images = await api.getImages();
-    renderArticleList(); renderThemeList(); renderImageList();
+    renderChips(); renderArticleList(); renderThemeList(); renderImageList();
     bindEvents();
-    uiModeBtn.textContent = document.documentElement.getAttribute('data-ui') === 'dark' ? '☀' : '☾';
     dataDir.textContent = await api.getDataDir();
     if (state.articles.length) await loadArticle(state.articles[0].id);
     else newArticle();
     render();
   }
-
   init();
 })();

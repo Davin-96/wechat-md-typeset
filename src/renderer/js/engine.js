@@ -1,12 +1,10 @@
+/* ===== 渲染引擎：Markdown → 公众号 HTML（装饰注入 + 微信内联转换） ===== */
 (function () {
   let md;
   function createMD() {
     if (md) return md;
     md = window.markdownit({
-      html: false,
-      linkify: true,
-      typographer: false,
-      breaks: false,
+      html: false, linkify: true, typographer: false, breaks: false,
       highlight: function (str, lang) {
         if (lang && window.hljs && window.hljs.getLanguage(lang)) {
           try { return window.hljs.highlight(str, { language: lang, ignoreIllegals: true }).value; } catch (e) {}
@@ -19,63 +17,99 @@
     return md;
   }
 
-  function camelToKebab(s) { return s.replace(/[A-Z]/g, m => '-' + m.toLowerCase()); }
+  const camelToKebab = s => s.replace(/[A-Z]/g, m => '-' + m.toLowerCase());
   function objToStyle(obj) {
     return Object.entries(obj)
       .filter(kv => kv[1] !== '' && kv[1] != null)
-      .map(kv => camelToKebab(kv[0]) + ':' + kv[1])
-      .join(';');
+      .map(kv => camelToKebab(kv[0]) + ':' + kv[1]).join(';');
   }
-
   function renderTaskLists(html) {
     return html
       .replace(/<li>(\s*<p>)?\s*\[ \]\s*/g, '<li$1><span class="task-checkbox">☐</span> ')
       .replace(/<li>(\s*<p>)?\s*\[[xX]\]\s*/g, '<li$1><span class="task-checkbox checked">☑</span> ');
   }
 
+  // ===== 装饰层注入 =====
   function walk(node, theme, codeTheme, counters) {
+    const decor = theme.decor || {};
     const children = Array.from(node.children);
     for (const el of children) {
       const tag = el.tagName.toLowerCase();
       let styleObj = null;
-      if (tag === 'code') {
-        styleObj = el.parentElement && el.parentElement.tagName === 'PRE' ? theme.code_block : theme.code_inline;
-      } else if (theme[tag]) {
-        styleObj = theme[tag];
-      } else if (tag === 'span' && el.classList.contains('task-checkbox')) {
-        styleObj = { color: el.classList.contains('checked') ? theme.a.color : '#bbbbbb', marginRight: '6px' };
-      }
+      if (tag === 'code') styleObj = el.parentElement && el.parentElement.tagName === 'PRE' ? theme.code_block : theme.code_inline;
+      else if (theme[tag]) styleObj = theme[tag];
+      else if (tag === 'span' && el.classList.contains('task-checkbox')) styleObj = { color: el.classList.contains('checked') ? theme.accent : '#bbbbbb', marginRight: '6px' };
       if (styleObj) {
         const existing = el.getAttribute('style');
         el.setAttribute('style', objToStyle(styleObj) + (existing ? ';' + existing : ''));
       }
-      if (tag === 'h2' && theme.h2Number) {
+
+      if (tag === 'h2') {
         counters.h2++;
-        const num = document.createElement('span');
-        num.setAttribute('leaf', '');
-        num.setAttribute('style', 'color:' + theme.accent + ';font-size:22px;font-weight:bold;margin-right:10px;line-height:1');
-        num.textContent = String(counters.h2).padStart(2, '0');
-        el.insertBefore(num, el.firstChild);
+        const n = String(counters.h2).padStart(2, '0');
+        const text = el.textContent.trim();
+        if (decor.h2Deco) {
+          const wrap = document.createElement('div');
+          wrap.innerHTML = decor.h2Deco(text, counters.h2, n);
+          const rep = wrap.firstElementChild;
+          if (rep) { el.parentNode.replaceChild(rep, el); continue; }
+        } else if (theme.h2Number) {
+          const num = document.createElement('span');
+          num.setAttribute('leaf', '');
+          num.setAttribute('style', 'color:' + theme.accent + ';font-size:22px;font-weight:bold;margin-right:10px;line-height:1');
+          num.textContent = n;
+          el.insertBefore(num, el.firstChild);
+        }
       }
-      if (tag === 'blockquote' && theme.quoteMark) {
-        const target = el.querySelector('p') || el;
-        const q = document.createElement('span');
-        q.setAttribute('leaf', '');
-        q.setAttribute('style', 'color:' + theme.accent + ';font-size:30px;font-weight:bold;line-height:1;margin-right:8px;vertical-align:-6px');
-        q.textContent = '"';
-        target.insertBefore(q, target.firstChild);
+      if (tag === 'h3' && decor.h3Deco) {
+        const text = el.textContent.trim();
+        const wrap = document.createElement('div');
+        wrap.innerHTML = decor.h3Deco(text, counters.h3);
+        const rep = wrap.firstElementChild;
+        if (rep) { el.parentNode.replaceChild(rep, el); continue; }
+      }
+      if (tag === 'blockquote') {
+        if (decor.quoteMark) {
+          const target = el.querySelector('p') || el;
+          const wrap = document.createElement('span');
+          wrap.innerHTML = decor.quoteMark;
+          target.insertBefore(wrap, target.firstChild);
+        } else if (theme.quoteMark) {
+          const target = el.querySelector('p') || el;
+          const q = document.createElement('span');
+          q.setAttribute('leaf', '');
+          q.setAttribute('style', 'color:' + theme.accent + ';font-size:30px;font-weight:bold;line-height:1;margin-right:8px;vertical-align:-6px');
+          q.textContent = '"';
+          target.insertBefore(q, target.firstChild);
+        }
+      }
+      if ((tag === 'ul' || tag === 'ol') && (decor.ulMark || decor.olMark)) {
+        const isOl = tag === 'ol';
+        Array.from(el.children).forEach((li, idx) => {
+          if (li.tagName.toLowerCase() !== 'li') return;
+          const mark = isOl ? (decor.olMark ? decor.olMark(idx + 1) : null) : decor.ulMark;
+          if (mark) {
+            const wrap = document.createElement('span');
+            wrap.innerHTML = mark;
+            const node = wrap.firstChild;
+            if (node) { li.insertBefore(node, li.firstChild); li.style.listStyle = 'none'; }
+          }
+        });
+        el.style.paddingLeft = el.style.paddingLeft || '20px';
+      }
+      if (tag === 'hr' && decor.hrDeco) {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = decor.hrDeco;
+        const rep = wrap.firstElementChild;
+        if (rep) { el.parentNode.replaceChild(rep, el); continue; }
       }
       if (tag === 'code') {
         el.querySelectorAll('span[class*="hljs-"]').forEach(span => {
           const cls = Array.from(span.classList).find(c => c.indexOf('hljs-') === 0);
-          if (cls) {
-            const color = codeTheme[cls.slice(5)] || codeTheme.default;
-            span.setAttribute('style', 'color:' + color);
-            span.removeAttribute('class');
-          }
+          if (cls) { span.setAttribute('style', 'color:' + (codeTheme[cls.slice(5)] || codeTheme.default)); span.removeAttribute('class'); }
         });
       }
-      walk(el, theme, codeTheme);
+      walk(el, theme, codeTheme, counters);
     }
   }
 
@@ -84,9 +118,10 @@
     tpl.innerHTML = rawHTML;
     const codeTheme = window.THEMES.codeThemes[theme.codeTheme] || window.THEMES.codeThemes['atom-one-dark'];
     const section = document.createElement('section');
+    section.className = 'article-body';
     section.setAttribute('style', objToStyle(theme.container));
     while (tpl.content.firstChild) section.appendChild(tpl.content.firstChild);
-    walk(section, theme, codeTheme, { h2: 0 });
+    walk(section, theme, codeTheme, { h2: 0, h3: 0 });
     return section.outerHTML;
   }
 
@@ -102,7 +137,7 @@
     raw = renderTaskLists(raw);
     const theme = window.THEMES.buildTheme(config);
     const html = applyTheme(raw, theme);
-    return { html: html, text: plainText(html) };
+    return { html: html, text: plainText(html), theme: theme };
   }
 
   function exportDoc(bodyHTML, title) {
@@ -110,23 +145,19 @@
     return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + t + '</title></head><body style="margin:0;background:#eef0f2;padding:24px;">' + bodyHTML + '</body></html>';
   }
 
-  // ===== WeChat export transformation =====
-
+  // ===== 微信公众号内联转换（原项目完整逻辑）=====
   function extractStyleValue(styleStr, prop) {
     if (!styleStr) return null;
     const escaped = prop.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const match = styleStr.match(new RegExp('(?:^|;)\\s*' + escaped + '\\s*:\\s*([^;]+)', 'i'));
     return match ? match[1].trim() : null;
   }
-
   function addImportant(styleStr) {
     if (!styleStr) return '';
     return styleStr.split(';').map(s => s.trim()).filter(s => s)
       .map(s => /!important\s*$/i.test(s) ? s : s + ' !important').join('; ');
   }
-
   const BLOCK_TAGS = new Set(['p', 'div', 'section', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'blockquote', 'pre', 'hr', 'img', 'thead', 'tbody', 'tr', 'td', 'th']);
-
   function removeWhitespaceNodes(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
@@ -136,8 +167,7 @@
         return NodeFilter.FILTER_ACCEPT;
       }
     });
-    const targets = [];
-    while (walker.nextNode()) targets.push(walker.currentNode);
+    const targets = []; while (walker.nextNode()) targets.push(walker.currentNode);
     targets.forEach(node => {
       if (!node.parentNode) return;
       const prev = node.previousSibling, next = node.nextSibling;
@@ -147,7 +177,6 @@
       if (prevBlock || nextBlock || (!prev && !next && parentBlock)) node.remove();
     });
   }
-
   function wrapTextNodesWithLeaf(root) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
       acceptNode(node) {
@@ -160,8 +189,7 @@
         return NodeFilter.FILTER_ACCEPT;
       }
     });
-    const targets = [];
-    while (walker.nextNode()) targets.push(walker.currentNode);
+    const targets = []; while (walker.nextNode()) targets.push(walker.currentNode);
     targets.forEach(node => {
       const span = document.createElement('span');
       span.setAttribute('leaf', '');
@@ -169,7 +197,6 @@
       span.appendChild(node);
     });
   }
-
   function normalizeMargins(root) {
     const blocks = Array.from(root.children).filter(el => el.nodeType === 1);
     blocks.forEach((block, i) => {
@@ -181,18 +208,14 @@
       }
     });
   }
-
   function transformForWechat(html, config) {
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
     const section = tpl.content.firstElementChild;
     if (!section) return html;
-
-    section.removeAttribute('class');
-    section.removeAttribute('id');
+    section.removeAttribute('class'); section.removeAttribute('id');
     section.querySelectorAll('[class]').forEach(el => el.removeAttribute('class'));
     section.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
-
     const cs = section.getAttribute('style') || '';
     const cFontSize = extractStyleValue(cs, 'font-size');
     const cLineHeight = extractStyleValue(cs, 'line-height');
@@ -206,7 +229,6 @@
       if (cFontFamily && !extractStyleValue(s, 'font-family')) s += ';font-family:' + cFontFamily;
       el.setAttribute('style', s);
     });
-
     const accent = (config && config.accent) || '#4caf50';
     section.querySelectorAll('ol').forEach(ol => {
       const items = Array.from(ol.children).filter(li => li.tagName === 'LI');
@@ -223,7 +245,6 @@
       });
       ol.parentNode.replaceChild(frag, ol);
     });
-
     section.querySelectorAll('img').forEach(img => {
       const parent = img.parentElement;
       if (parent && parent.tagName === 'P' && parent.children.length === 1 && parent.children[0] === img && !parent.textContent.trim()) {
@@ -231,27 +252,19 @@
         if (!extractStyleValue(s, 'text-align')) parent.setAttribute('style', s + ';text-align:center');
       }
     });
-
     normalizeMargins(section);
-
     section.setAttribute('style', addImportant(section.getAttribute('style') || ''));
-    section.querySelectorAll('[style]').forEach(el => {
-      el.setAttribute('style', addImportant(el.getAttribute('style')));
-    });
-
+    section.querySelectorAll('[style]').forEach(el => el.setAttribute('style', addImportant(el.getAttribute('style'))));
     removeWhitespaceNodes(section);
     wrapTextNodesWithLeaf(section);
-
     const mark = document.createElement('p');
     mark.setAttribute('style', 'display:none !important;');
     const styleType = document.createElement('mp-style-type');
     styleType.setAttribute('data-value', '3');
     mark.appendChild(styleType);
     section.appendChild(mark);
-
     return section.outerHTML;
   }
-
   function renderForWechat(mdText, config) {
     const r = render(mdText, config);
     const wechatHTML = transformForWechat(r.html, config);

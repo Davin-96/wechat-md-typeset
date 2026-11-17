@@ -2,7 +2,7 @@
 
 > 写 Markdown，一键得到能直接粘进微信公众号的排版。
 
-一个给公众号博主用的 Electron 桌面工具：左边写 Markdown，右边实时预览公众号效果，**20 套内置排版主题**加自定义样式编辑器；点「复制到公众号」后，剪贴板里就是带完整内联样式的富文本，粘进后台即可发布。不联网也能用，文章、主题、素材全部存在本地。
+一个给公众号博主用的 Electron 桌面工具：左边写 Markdown，右边实时预览公众号效果，**50 套内置排版主题**加自定义样式编辑器；点「复制到公众号」后，剪贴板里就是带完整内联样式的富文本，粘进后台即可发布。不联网也能用，文章、主题、素材全部存在本地。v2.0.0 采用全新苹果风界面，主题扩充到 50 套。
 
 ![主界面：Markdown 编辑区与公众号实时预览](screenshots/ui-light.png)
 
@@ -13,7 +13,7 @@
 | 能力 | 说明 |
 | --- | --- |
 | 实时预览 | 输入 Markdown 后 120 ms 防抖渲染，右侧即时显示公众号版式 |
-| 20 套主题 | 从日常通用到暗色潮流，覆盖不同账号调性，点一下即切换 |
+| 50 套主题 | 通用 / 文艺 / 商务 / 生活 / 科技 / 暗色六大类，从日常推文到品牌调性全覆盖 |
 | 自定义样式 | 主色、背景、正文字号/行距/字体、H1/H2 样式、引用样式、代码配色、图片圆角等可视化编辑 |
 | 一键复制 | 写入 `text/html` + `text/plain` 双格式剪贴板，粘贴即用 |
 | 导出 HTML | 导出完整离线 HTML 文件，便于归档或二次处理 |
@@ -21,58 +21,88 @@
 | 本地存储 | 文章、主题、素材、设置都是本地 JSON 文件，无账号、无云同步 |
 | 明暗界面 | 跟随系统或手动切换，编辑器与预览互不干扰 |
 
-## 20 套内置主题
+## 50 套内置主题
 
-同一篇示例文章，逐主题实时渲染的效果总览：
+同一篇示例文章，逐主题实时渲染的效果总览（5 列 × 10 行）：
 
-![20 套内置主题总览](screenshots/themes-overview.png)
+![50 套内置主题总览](screenshots/themes-overview.png)
 
-侧栏的「主题」面板里可以直接点选，卡片本身就是该主题的缩略预览：
+侧栏的「主题」面板按风格分类，可以直接点选，卡片本身就是该主题的缩略预览：
 
 ![主题面板](screenshots/ui-themes.png)
 
-| # | 主题 | 风格 | 适合 |
-| --- | --- | --- | --- |
-| 01 | 摸鱼绿 `moyu` | 绿色色块标题、下划线小标题 | 日常通用、清单干货 |
-| 02 | 深海蓝 `deepsea` | 蓝色下划线标题、左边框小标题 | 科技、职场 |
-| 03 | 活力橙 `orange` | 橙色双色块标题 | 活动、促销、轻松话题 |
-| 04 | 红绯 `redfei` | 玫红左边框标题 | 情感、美妆 |
-| 05 | 石墨极简 `graphite` | 灰黑纯文字、数字序号 | 极简、深度长文 |
-| 06 | 禅意留白 `zen` | 楷体、2.0 行距、引号引用 | 随笔、读书、散文 |
-| 07 | 金融时报 `ftpaper` | 衬线体、米色纸感、卡片引用 | 财经、商业分析 |
-| 08 | 橄榄手记 `olive` | 橄榄绿、米黄底 | 手记、生活方式 |
-| 09 | 摸鱼票据 `ticket` | 青色、虚线票据引用 | 清单、攻略、测评 |
-| 10 | 靛蓝学院 `academia` | 衬线体、描边标题、数字序号 | 教程、知识科普 |
-| 11 | 樱花粉 `sakura` | 粉色衬线、卡片引用、大圆角图 | 生活方式、女性向 |
-| 12 | 奶油编辑部 `cream` | 墨绿点缀、衬线体、引号引用 | 专栏、编辑部风格 |
-| 13 | 琥珀遗产 `amber` | 琥珀描边标题、渐变下划线 | 人文、历史、书评 |
-| 14 | 骨白热色 `bonehot` | 玫红描边、零圆角强对比 | 潮流、观点 |
-| 15 | 静奢森林 `luxforest` | 深绿衬线、卡片引用 | 品牌、质感内容 |
-| 16 | 翠意 `emerald` | 翠绿左边框、渐变小标题 | 自然、健康 |
-| 17 | 合成波 `synthwave` | 深紫底、渐变标题（暗色） | 设计、潮流 |
-| 18 | 赛博蓝 `cyberblue` | 深蓝底、青色渐变（暗色） | 数码、科技 |
-| 19 | 黑金 `noirgold` | 黑底描边金框（暗色） | 商务、高端 |
-| 20 | 暗夜公爵 `dracula` | Dracula 代码配色（暗色） | 技术、代码类文章 |
+| # | 主题 | ID | 分类 | 明暗 |
+| --- | --- | --- | --- | --- |
+| 01 | 摸鱼绿 | `moyu` | 通用 | 亮 |
+| 02 | 深海蓝 | `deepsea` | 通用 | 亮 |
+| 03 | 石墨极简 | `graphite` | 通用 | 亮 |
+| 04 | 禅意留白 | `zen` | 文艺 | 亮 |
+| 05 | 金融时报 | `ftpaper` | 商务 | 亮 |
+| 06 | 靛蓝学院 | `academia` | 文艺 | 亮 |
+| 07 | 琥珀遗产 | `amber` | 文艺 | 亮 |
+| 08 | 静奢森林 | `luxforest` | 商务 | 亮 |
+| 09 | 黑金 | `noirgold` | 暗色 | 暗 |
+| 10 | 暗夜公爵 | `dracula` | 暗色 | 暗 |
+| 11 | 国潮 | `festival` | 文艺 | 亮 |
+| 12 | 水墨 | `inkwash` | 文艺 | 亮 |
+| 13 | 终端 | `terminal` | 科技 | 暗 |
+| 14 | 报纸 | `news` | 商务 | 亮 |
+| 15 | 时间轴 | `timeline` | 科技 | 亮 |
+| 16 | 对话框 | `bubble` | 生活 | 亮 |
+| 17 | 霓虹 | `neon` | 暗色 | 暗 |
+| 18 | 清单 | `checklist` | 科技 | 亮 |
+| 19 | 简报 | `briefing` | 商务 | 亮 |
+| 20 | 留白 | `whisper` | 文艺 | 亮 |
+| 21 | 文档 | `docs` | 科技 | 亮 |
+| 22 | 线性 Linear | `linear` | 科技 | 暗 |
+| 23 | 边界 Vercel | `vercel` | 通用 | 亮 |
+| 24 | 克劳德 Claude | `claude` | 文艺 | 亮 |
+| 25 | 翠基 Supabase | `supabase` | 科技 | 暗 |
+| 26 | 条纹 Stripe | `stripe` | 商务 | 亮 |
+| 27 | 射线 Raycast | `raycast` | 暗色 | 暗 |
+| 28 | 点屋 ClickHouse | `clickhouse` | 生活 | 亮 |
+| 29 | 绿叶 MongoDB | `mongodb` | 科技 | 亮 |
+| 30 | 理智 Sanity | `sanity` | 文艺 | 暗 |
+| 31 | 哨兵 Sentry | `sentry` | 暗色 | 暗 |
+| 32 | 跑道 Runway | `runway` | 文艺 | 暗 |
+| 33 | 紫调 Mistral | `mistral` | 文艺 | 亮 |
+| 34 | 羊驼 Ollama | `ollama` | 科技 | 暗 |
+| 35 | 未来 xAI | `xai` | 通用 | 暗 |
+| 36 | Medium 奶油 | `medium` | 文艺 | 亮 |
+| 37 | 狂牛 Lamborghini | `lamborghini` | 暗色 | 暗 |
+| 38 | 超人 Superhuman | `superhuman` | 暗色 | 暗 |
+| 39 | 棱镜 Vivid | `vivid` | 暗色 | 暗 |
+| 40 | 战情室 Factory | `factory` | 科技 | 暗 |
+| 41 | 笔记 Notion | `notion` | 通用 | 亮 |
+| 42 | 代码 GitHub | `github` | 科技 | 亮 |
+| 43 | 留白 Apple | `apple` | 通用 | 亮 |
+| 44 | 黑白 shadcn | `shadcn` | 通用 | 亮 |
+| 45 | 设计 Figma | `figma` | 暗色 | 暗 |
+| 46 | 青蓝 Tailwind | `tailwind` | 科技 | 亮 |
+| 47 | 文档 Mintlify | `mintlify` | 科技 | 亮 |
+| 48 | 动感 Framer | `framer` | 暗色 | 暗 |
+| 49 | 线性浅色 | `linearlight` | 通用 | 亮 |
+| 50 | 编辑器 Cursor | `cursor` | 科技 | 暗 |
 
 ## 实际案例截图
 
-下面用 [`examples/sample.md`](examples/sample.md) 这篇示例文章（含标题、引用、列表、表格、代码块）真实渲染，不是设计稿。完整的 20 张见 [`screenshots/`](screenshots)。
+下面用 [`examples/sample.md`](examples/sample.md) 这篇示例文章（含标题、引用、列表、表格、代码块）真实渲染，不是设计稿。完整的 50 张见 [`screenshots/`](screenshots)。
 
 **摸鱼绿**：适合大多数日常推文
 
 ![摸鱼绿主题案例](screenshots/theme-01-moyu.png)
 
-**金融时报**：衬线 + 纸感底色，适合深度长文
+**留白 Apple**：大留白 + 无衬线，适合品牌与质感内容
 
-![金融时报主题案例](screenshots/theme-07-ftpaper.png)
+![留白 Apple 主题案例](screenshots/theme-43-apple.png)
 
 **黑金**：暗色强对比，适合观点类内容
 
-![黑金主题案例](screenshots/theme-19-noirgold.png)
+![黑金主题案例](screenshots/theme-09-noirgold.png)
 
 ## 自定义主题与暗色界面
 
-「编辑样式」弹窗里能逐项调主题，调完保存即成为自己的主题，和内置的 20 套并列：
+「编辑样式」弹窗里能逐项调主题，调完保存即成为自己的主题，和内置的 50 套并列：
 
 ![编辑样式弹窗](screenshots/ui-theme-editor.png)
 
@@ -95,19 +125,19 @@ npm start
 npm run dist
 ```
 
-产物在 `out/`：`公众号排版工具-便携版.exe` 与 `公众号排版工具-安装版.zip`。
+产物在 `out/`：`公众号排版工具-便携版-v2.0.0.exe` 与 `公众号排版工具-安装版-v2.0.0.exe`。
 
 **不想装环境**：到 [Releases](https://github.com/Davin-96/wechat-md-typeset/releases/latest) 下载，两个版本都放在 Release 附件里：
 
-- `WeChatMD-Portable-v1.0.0.exe` —— 便携版，双击即用、无需安装（约 106 MB，原名「公众号排版工具-便携版.exe」）
-- `WeChatMD-Setup-v1.0.0.zip` —— 安装版压缩包，解压后按向导安装（约 146 MB，原名「公众号排版工具-安装版.zip」）
+- `WeChatMD-Portable-v2.0.0.exe` —— 便携版，双击即用、无需安装（约 106 MB，原名「公众号排版工具-便携版-v2.0.0.exe」）
+- `WeChatMD-Setup-v2.0.0.exe` —— 安装版，按向导安装（约 116 MB，原名「公众号排版工具-安装版-v2.0.0.exe」）
 
 仓库里不放安装包：单个文件超过 GitHub 仓库 100 MB 上限，而 Release 附件上限是 2 GB。附件名使用 ASCII，是因为 GitHub 会把附件名里的中文字符规范化成 `-`（和仓库名一样）。
 
 ## 使用流程
 
 1. 新建文章，在左侧写 Markdown（也支持直接粘贴已有文稿）
-2. 在「主题」面板选一套样式，或点「编辑样式」自己调
+2. 在「主题」面板按分类选一套样式，或点「编辑样式」自己调
 3. 需要配图时点「插入图片」上传，或粘贴图片 URL
 4. 点「复制到公众号」，到公众号后台正文里 `Ctrl+V`；也可「导出 HTML」留存
 
@@ -124,13 +154,13 @@ src/
     index.html
     css/app.css
     js/boot.js      明暗模式初始化
-    js/themes.js    20 套内置主题 + buildTheme()
+    js/themes.js    50 套内置主题 + buildTheme()
     js/engine.js    Markdown → 公众号内联样式 HTML
     js/app.js       UI 与交互
     lib/            markdown-it、highlight.js（本地打包，无 CDN 依赖）
 build/              应用图标
 examples/sample.md  截图用的示例文章
-screenshots/        界面截图 + 20 套主题案例图 + 总览
+screenshots/        界面截图 + 50 套主题案例图 + 总览
 docs/ANALYSIS.md    完整技术拆解
 ```
 
