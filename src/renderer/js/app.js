@@ -5,18 +5,16 @@
   const $ = (id) => document.getElementById(id);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-  const editThemeBtn = $('editThemeBtn'), insertImageBtn = $('insertImageBtn'),
-    copyBtn = $('copyBtn'), exportBtn = $('exportBtn'), settingsBtn = $('settingsBtn'),
-    newArticleBtn = $('newArticleBtn'), newThemeBtn = $('newThemeBtn'), uploadImageBtn = $('uploadImageBtn'),
-    articleList = $('articleList'), themeList = $('themeList'), imageList = $('imageList'),
+  const editThemeBtn = $('editThemeBtn'),
+    copyBtn = $('copyBtn'), exportBtn = $('exportBtn'),
+    newArticleBtn = $('newArticleBtn'), newThemeBtn = $('newThemeBtn'),
+    articleList = $('articleList'), themeList = $('themeList'),
     articleTitle = $('articleTitle'), mdEditor = $('mdEditor'), wordCount = $('wordCount'), saveStatus = $('saveStatus'),
     preview = $('preview'), previewThemeName = $('previewThemeName'), dataDir = $('dataDir'),
+    previewScroll = document.querySelector('.preview-scroll'), syncScrollBtn = $('syncScrollBtn'),
     themeModal = $('themeModal'), themeForm = $('themeForm'), themeNameInput = $('themeNameInput'), saveThemeBtn = $('saveThemeBtn'),
-    imageModal = $('imageModal'), dropZone = $('dropZone'), fileInput = $('fileInput'), uploadStatus = $('uploadStatus'),
-    imageUrlInput = $('imageUrlInput'), insertUrlBtn = $('insertUrlBtn'), imagePickerList = $('imagePickerList'),
-    settingsModal = $('settingsModal'), imageHostSelect = $('imageHostSelect'), smmsToken = $('smmsToken'),
-    imgbbKey = $('imgbbKey'), autoSaveToggle = $('autoSaveToggle'), settingsDataDir = $('settingsDataDir'), saveSettingsBtn = $('saveSettingsBtn'),
-    uiModeBtn = $('uiModeBtn'), uiModeSelect = $('uiModeSelect'), toastEl = $('toast'),
+    uiModeBtn = $('uiModeBtn'), toastEl = $('toast'),
+    appTitle = $('appTitle'), appTitleInput = $('appTitleInput'), renameBtn = $('renameBtn'), brandMark = document.querySelector('.brand-mark'),
     themeSearch = $('themeSearch'), styleSeg = $('styleSeg'), themeChips = $('themeChips');
 
   const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -35,7 +33,7 @@
   const defaultConfig = cloneConfig(THEMES.builtinConfigs[0]);
   const state = {
     article: null, config: cloneConfig(defaultConfig), currentThemeId: null,
-    articles: [], customThemes: [], images: [], settings: null,
+    articles: [], customThemes: [], settings: null,
     editing: false, editingConfig: null, editingBaseId: null, editingThemeId: null, editingDecorRef: null, configBeforeEdit: null,
     currentGroup: '全部', currentStyle: 'all', searchKey: '',
     saveTimer: null, renderTimer: null, isDirty: false
@@ -73,7 +71,6 @@
     document.documentElement.setAttribute('data-ui-mode', mode);
     const dark = mode === 'dark' || (mode === 'auto' && media.matches);
     document.documentElement.setAttribute('data-ui', dark ? 'dark' : 'light');
-    if (uiModeSelect) uiModeSelect.value = mode;
     if (uiModeBtn) uiModeBtn.textContent = dark ? '☀' : '☾';
   }
   function setUIMode(mode) { localStorage.setItem('ui-mode', mode); applyUIMode(); }
@@ -99,23 +96,33 @@
   }
   function markDirty() { state.isDirty = true; saveStatus.textContent = '未保存'; scheduleSave(); }
   function scheduleSave() {
-    if (!state.settings || !state.settings.autoSave || state.editing) return;
+    if (state.editing) return;
     clearTimeout(state.saveTimer); state.saveTimer = setTimeout(saveCurrentArticle, 800);
   }
 
   // ===== Articles =====
-  async function saveCurrentArticle() {
+  // 保存串行队列：避免并发保存导致 state.article 被旧回调覆盖（误链接根因之一）
+  let saveChain = Promise.resolve();
+  function saveCurrentArticle() {
     if (!state.article) state.article = {};
-    state.article.title = articleTitle.value || '无标题文章';
-    state.article.content = mdEditor.value;
-    state.article.config = serializeConfig(state.config);
-    state.article.themeId = state.currentThemeId;
-    const saved = await api.saveArticle(state.article);
-    state.article = saved;
-    const i = state.articles.findIndex(a => a.id === saved.id);
-    if (i >= 0) state.articles[i] = saved; else state.articles.unshift(saved);
-    renderArticleList();
-    saveStatus.textContent = '已保存'; state.isDirty = false;
+    const article = state.article;
+    // 在调用瞬间同步快照界面内容，防止后续切换文章污染这次保存
+    article.title = articleTitle.value || '无标题文章';
+    article.content = mdEditor.value;
+    article.config = serializeConfig(state.config);
+    article.themeId = state.currentThemeId;
+    const task = saveChain.then(async () => {
+      const saved = await api.saveArticle(article);
+      const i = state.articles.findIndex(a => a.id === saved.id);
+      if (i >= 0) state.articles[i] = saved; else state.articles.unshift(saved);
+      // 仅当用户仍停留在这篇文章时才替换当前引用，防止覆盖切换后的文章
+      if (state.article === article) state.article = saved;
+      renderArticleList();
+      saveStatus.textContent = '已保存';
+      if (state.article === article) state.isDirty = false;
+    });
+    saveChain = task.catch(() => {});
+    return task;
   }
   async function loadArticle(id) {
     if (state.isDirty) await saveCurrentArticle();
@@ -373,101 +380,152 @@
     buildThemeForm(state.editingConfig); render(); toast('已恢复为原主题参数');
   }
 
-  // ===== Images =====
-  function insertImageMarkdown(url) {
-    const ta = mdEditor, start = ta.selectionStart, end = ta.selectionEnd;
-    const md = '![图片](' + url + ')';
-    ta.value = ta.value.slice(0, start) + md + ta.value.slice(end);
-    ta.selectionStart = ta.selectionEnd = start + md.length;
-    ta.focus(); onEditorInput(); closeModal('imageModal');
-  }
-  async function handleUpload(file, insert) {
-    if (!file || !file.type.startsWith('image/')) { toast('请选择图片文件'); return; }
-    uploadStatus.textContent = '上传中…';
-    try {
-      const buf = await file.arrayBuffer();
-      const url = await api.uploadImage(buf, file.name);
-      const img = await api.saveImage({ name: file.name, url: url });
-      state.images.unshift(img); renderImageList();
-      uploadStatus.textContent = '';
-      if (insert) insertImageMarkdown(url); else { toast('已上传到素材库'); closeModal('imageModal'); }
-    } catch (e) { uploadStatus.textContent = ''; toast('上传失败：' + e.message); }
-  }
-  async function deleteImage(id) {
-    await api.deleteImage(id);
-    state.images = state.images.filter(i => i.id !== id); renderImageList();
-  }
-  function renderImageList() {
-    imageList.innerHTML = '';
-    if (!state.images.length) imageList.innerHTML = '<div class="list-empty">暂无素材</div>';
-    else for (const img of state.images) {
-      const card = document.createElement('div'); card.className = 'image-card';
-      const im = document.createElement('img'); im.src = img.url; im.alt = img.name || '';
-      card.appendChild(im); card.addEventListener('click', () => insertImageMarkdown(img.url));
-      const del = document.createElement('button'); del.className = 'image-del'; del.textContent = '✕';
-      del.addEventListener('click', e => { e.stopPropagation(); deleteImage(img.id); });
-      card.appendChild(del); imageList.appendChild(card);
-    }
-    renderImagePicker();
-  }
-  function renderImagePicker() {
-    imagePickerList.innerHTML = '';
-    if (!state.images.length) { imagePickerList.innerHTML = '<div class="list-empty">暂无素材，请先上传</div>'; return; }
-    for (const img of state.images) {
-      const card = document.createElement('div'); card.className = 'image-card';
-      const im = document.createElement('img'); im.src = img.url; card.appendChild(im);
-      card.addEventListener('click', () => insertImageMarkdown(img.url));
-      imagePickerList.appendChild(card);
-    }
-  }
-
   // ===== Copy & Export =====
   async function copyToWechat() {
+    if (state.article) await saveCurrentArticle();
     const r = Engine.renderForWechat(mdEditor.value, activeConfig());
-    try { await api.writeClipboardHTML(r.html, r.text); toast('已复制，去公众号后台粘贴'); }
-    catch (e) { toast('复制失败：' + (e && e.message ? e.message : e)); }
+    try {
+      await api.writeClipboardHTML(r.html, r.text);
+      toast('已复制，去公众号后台粘贴');
+      // 联动：回写关联选题为「待发布」
+      // 双向校验：选题的 articleId 与文章的 topicId 必须互相指向，防止误链接
+      if (state.article && state.article.id && window.TopicsBridge) {
+        const t = window.TopicsBridge.getByArticle(state.article.id);
+        const topicMatches = t && (!state.article.topicId || state.article.topicId === t.id);
+        if (topicMatches && t.status !== '待发布' && t.status !== '已归档' && confirm('已复制到公众号。是否把关联选题「' + t.title.slice(0, 14) + '…」标记为「待发布」？')) {
+          window.TopicsBridge.markPublished(state.article.id);
+        }
+      }
+    } catch (e) { toast('复制失败：' + (e && e.message ? e.message : e)); }
   }
   async function exportHTML() {
+    if (state.article) await saveCurrentArticle();
     const r = Engine.render(mdEditor.value, activeConfig());
-    const doc = Engine.exportDoc(r.html, articleTitle.value || '公众号文章');
-    const p = await api.saveHTMLFile(doc, (articleTitle.value || '公众号文章') + '.html');
+    const articleName = articleTitle.value || '公众号文章';
+    const doc = Engine.exportDoc(r.html, articleName);
+    const p = await api.saveHTMLFile(doc, appTitleText + '-' + articleName + '.html');
     if (p) toast('已导出 HTML');
   }
 
-  // ===== Settings =====
-  function toggleCustomFields() { $('customFields').classList.toggle('hidden', imageHostSelect.value !== 'custom'); }
-  async function openSettings() {
-    imageHostSelect.value = state.settings.imageHost;
-    smmsToken.value = state.settings.smmsToken || '';
-    imgbbKey.value = state.settings.imgbbKey || '';
-    $('customApiUrl').value = state.settings.customApiUrl || '';
-    $('customFileField').value = state.settings.customFileField || 'file';
-    $('customTokenHeader').value = state.settings.customTokenHeader || 'Authorization';
-    $('customToken').value = state.settings.customToken || '';
-    $('customResponsePath').value = state.settings.customResponsePath || '';
-    $('customExtraFields').value = state.settings.customExtraFields || '';
-    toggleCustomFields();
-    autoSaveToggle.checked = state.settings.autoSave !== false;
-    settingsDataDir.textContent = await api.getDataDir();
-    openModal('settingsModal');
+  // ===== 与选题工作区的桥接 =====
+  window.EditorBridge = {
+    // 由选题「开始写作」调用：生成文章草稿并载入编辑器
+    startFromTopic(topic) {
+      const skeleton = [
+        '# ' + (topic.title || '无标题选题'), '',
+        topic.notes ? '> ' + topic.notes : '',
+        (topic.links || []).length ? '' : '',
+        (topic.links || []).map((l, i) => (i + 1) + '. 素材：' + l).join('\n'),
+        '', '## 正文', '', '在这里开始写作……'
+      ].filter((line, i, arr) => !(line === '' && arr[i - 1] === '')).join('\n');
+      const article = {
+        id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6),
+        title: topic.title || '无标题选题',
+        content: skeleton,
+        config: {},
+        themeId: getTheme('linear') ? 'linear' : THEMES.builtinThemes[0].id,
+        topicId: topic.id,
+        tags: topic.tags || [],
+        createdAt: Date.now()
+      };
+      state.article = article;
+      state.currentThemeId = article.themeId;
+      state.config = cloneConfig(getTheme(article.themeId).config);
+      articleTitle.value = article.title;
+      mdEditor.value = article.content;
+      state.isDirty = true;
+      render(); renderThemeList(); renderArticleList();
+      // 立即落库，确保选题关联的文章真实存在；但绝不覆盖用户已经切走的文章
+      api.saveArticle(article).then(saved => {
+        const i = state.articles.findIndex(a => a.id === saved.id);
+        if (i >= 0) state.articles[i] = saved; else state.articles.unshift(saved);
+        if (state.article && state.article.id === article.id) state.article = saved;
+        renderArticleList();
+      });
+      saveStatus.textContent = '未保存';
+      return article;
+    },
+    async openArticle(id) {
+      if (!id) return;
+      // 先串行保存当前文章并等待落定，再加载目标文章；避免两次并发保存互相覆盖
+      if (state.isDirty) await saveCurrentArticle();
+      await loadArticle(id);
+    },
+    getTopicOfCurrent() {
+      return state.article && state.article.topicId ? state.article.topicId : null;
+    }
+  };
+
+  // ===== 工作台标题：顶栏显示 + 窗口标题 + 导出文件名前缀 =====
+  let appTitleText = '选题排版工作台';
+  function applyAppTitle(name) {
+    appTitleText = (typeof name === 'string' && name.trim()) ? name.trim() : '选题排版工作台';
+    if (appTitle) { appTitle.textContent = appTitleText; appTitle.title = appTitleText + '（点击修改）'; }
+    if (brandMark) brandMark.textContent = appTitleText.charAt(0);
+    document.title = appTitleText;
   }
-  async function saveSettings() {
-    state.settings.imageHost = imageHostSelect.value;
-    state.settings.smmsToken = smmsToken.value;
-    state.settings.imgbbKey = imgbbKey.value;
-    state.settings.customApiUrl = $('customApiUrl').value;
-    state.settings.customFileField = $('customFileField').value;
-    state.settings.customTokenHeader = $('customTokenHeader').value;
-    state.settings.customToken = $('customToken').value;
-    state.settings.customResponsePath = $('customResponsePath').value;
-    state.settings.customExtraFields = $('customExtraFields').value;
-    state.settings.autoSave = autoSaveToggle.checked;
-    await api.saveSettings(state.settings);
-    closeModal('settingsModal'); toast('设置已保存');
+  // 内联编辑：Electron 屏蔽了 window.prompt，改用应用内输入框
+  function beginRename() {
+    if (!appTitle || !appTitleInput) return;
+    appTitleInput.value = appTitleText;
+    appTitle.classList.add('hidden');
+    renameBtn && renameBtn.classList.add('hidden');
+    appTitleInput.classList.remove('hidden');
+    appTitleInput.focus(); appTitleInput.select();
+  }
+  async function commitRename(save) {
+    if (!appTitleInput || appTitleInput.classList.contains('hidden')) return;
+    const val = appTitleInput.value.trim();
+    appTitleInput.classList.add('hidden');
+    appTitle.classList.remove('hidden');
+    renameBtn && renameBtn.classList.remove('hidden');
+    if (!save || !val || val === appTitleText) return;
+    const saved = await api.setTitle(val);
+    applyAppTitle(saved);
+    toast('工作台名称已更新');
+  }
+  function renameApp() { beginRename(); }
+
+  // ===== 左右同频滚动（编辑区 ↔ 预览区，按比例联动，带防回环锁） =====
+  let scrollSyncOn = true;
+  let scrollLock = false;
+  function syncScroll(from, to) {
+    if (!scrollSyncOn || scrollLock) return;
+    const fromMax = from.scrollHeight - from.clientHeight;
+    const toMax = to.scrollHeight - to.clientHeight;
+    if (fromMax <= 1 || toMax <= 1) return;
+    scrollLock = true;
+    to.scrollTop = (from.scrollTop / fromMax) * toMax;
+    // 同步落定后再解锁，避免反向 scroll 事件来回触发
+    requestAnimationFrame(() => { requestAnimationFrame(() => { scrollLock = false; }); });
+  }
+  function applySyncBtn() {
+    if (!syncScrollBtn) return;
+    syncScrollBtn.classList.toggle('on', scrollSyncOn);
+    syncScrollBtn.title = '左右同频滚动：' + (scrollSyncOn ? '开' : '关');
   }
 
   // ===== Events =====
   function bindEvents() {
+    if (renameBtn) renameBtn.addEventListener('click', (e) => { e.stopPropagation(); beginRename(); });
+    if (appTitle) appTitle.addEventListener('click', beginRename);
+    if (appTitleInput) {
+      appTitleInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commitRename(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); commitRename(false); }
+      });
+      appTitleInput.addEventListener('blur', () => commitRename(true));
+    }
+    applySyncBtn();
+    if (previewScroll) {
+      mdEditor.addEventListener('scroll', () => syncScroll(mdEditor, previewScroll));
+      previewScroll.addEventListener('scroll', () => syncScroll(previewScroll, mdEditor));
+    }
+    if (syncScrollBtn) syncScrollBtn.addEventListener('click', () => {
+      scrollSyncOn = !scrollSyncOn;
+      applySyncBtn();
+      toast(scrollSyncOn ? '已开启同频滚动' : '已关闭同频滚动');
+    });
     mdEditor.addEventListener('input', onEditorInput);
     articleTitle.addEventListener('input', markDirty);
     mdEditor.addEventListener('keydown', e => {
@@ -485,7 +543,6 @@
       const cur = document.documentElement.getAttribute('data-ui');
       setUIMode(cur === 'dark' ? 'light' : 'dark');
     });
-    if (uiModeSelect) uiModeSelect.addEventListener('change', e => setUIMode(e.target.value));
     editThemeBtn.addEventListener('click', () => openThemeEditor(state.currentThemeId));
     newThemeBtn.addEventListener('click', () => openThemeEditor(state.currentThemeId));
     saveThemeBtn.addEventListener('click', saveTheme);
@@ -496,48 +553,13 @@
       state.currentStyle = b.dataset.style; renderChips(); renderThemeList();
     }));
     newArticleBtn.addEventListener('click', newArticle);
-    insertImageBtn.addEventListener('click', () => { openModal('imageModal'); switchImageTab('upload'); });
     copyBtn.addEventListener('click', copyToWechat);
     exportBtn.addEventListener('click', exportHTML);
-    settingsBtn.addEventListener('click', openSettings);
-    saveSettingsBtn.addEventListener('click', saveSettings);
-    imageHostSelect.addEventListener('change', toggleCustomFields);
 
-    $$('.top-seg button').forEach(b => b.addEventListener('click', () => {
-      $$('.top-seg button').forEach(x => x.classList.toggle('on', x === b));
-      const map = { edit: 'articles', themes: 'themes', assets: 'images' };
-      const tab = document.querySelector('.sidebar-tabs .tab[data-tab="' + map[b.dataset.view] + '"]');
-      if (tab) tab.click();
-    }));
     $$('.sidebar-tabs .tab').forEach(tab => tab.addEventListener('click', () => {
       $$('.sidebar-tabs .tab').forEach(t => t.classList.toggle('on', t === tab));
       $$('.tab-panel').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== tab.dataset.tab));
     }));
-    $$('[data-imgtab]').forEach(seg => seg.addEventListener('click', () => switchImageTab(seg.dataset.imgtab)));
-    function switchImageTab(name) {
-      $$('[data-imgtab]').forEach(s => s.classList.toggle('on', s.dataset.imgtab === name));
-      $$('[data-imgpanel]').forEach(p => p.classList.toggle('hidden', p.dataset.imgpanel !== name));
-      if (name === 'library') renderImagePicker();
-    }
-    dropZone.addEventListener('click', () => fileInput.click());
-    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleUpload(fileInput.files[0], true); fileInput.value = ''; });
-    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', e => {
-      e.preventDefault(); dropZone.classList.remove('dragover');
-      if (e.dataTransfer.files[0]) handleUpload(e.dataTransfer.files[0], true);
-    });
-    insertUrlBtn.addEventListener('click', () => {
-      const url = imageUrlInput.value.trim();
-      if (!url) { toast('请输入图片 URL'); return; }
-      insertImageMarkdown(url); imageUrlInput.value = '';
-    });
-    const libraryInput = document.createElement('input');
-    libraryInput.type = 'file'; libraryInput.accept = 'image/*'; libraryInput.hidden = true;
-    document.body.appendChild(libraryInput);
-    libraryInput.addEventListener('change', () => { if (libraryInput.files[0]) handleUpload(libraryInput.files[0], false); libraryInput.value = ''; });
-    uploadImageBtn.addEventListener('click', () => libraryInput.click());
-
     $$('[data-close]').forEach(b => b.addEventListener('click', () => { b.closest('.modal').classList.add('hidden'); if (state.editing) cancelEdit(true); }));
     $$('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) { m.classList.add('hidden'); if (state.editing) cancelEdit(true); } }));
   }
@@ -546,15 +568,25 @@
   async function init() {
     applyUIMode();
     state.settings = await api.getSettings();
+    applyAppTitle(state.settings.appTitle);
     state.customThemes = await api.getThemes();
     state.articles = await api.listArticles();
-    state.images = await api.getImages();
-    renderChips(); renderArticleList(); renderThemeList(); renderImageList();
+    renderChips(); renderArticleList(); renderThemeList();
     bindEvents();
     dataDir.textContent = await api.getDataDir();
     if (state.articles.length) await loadArticle(state.articles[0].id);
     else newArticle();
     render();
+    // 默认进入选题工作区；等待选题模块就绪
+    let tries = 0;
+    const setInitialWorkspace = () => {
+      if (window.TopicsBridge) {
+        let saved = 'topics';
+        try { saved = localStorage.getItem('wb-workspace') || 'topics'; } catch (e) {}
+        window.TopicsBridge.switchWorkspace(saved);
+      } else if (tries++ < 40) { setTimeout(setInitialWorkspace, 50); }
+    };
+    setInitialWorkspace();
   }
   init();
 })();

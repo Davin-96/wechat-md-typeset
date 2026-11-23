@@ -2,7 +2,6 @@ const { app, BrowserWindow, ipcMain, clipboard, dialog, Menu, ClipboardItem } = 
 const path = require('path');
 const fs = require('fs');
 const Store = require('./store');
-const { uploadImage } = require('./image-upload');
 
 // 开发验证专用：仅在设置 WB_DEBUG 环境变量时开启 CDP，生产运行不生效
 if (process.env.WB_DEBUG) {
@@ -50,12 +49,12 @@ function buildChineseMenu() {
       { role: 'close', label: '关闭窗口' }
     ]},
     { label: '帮助', submenu: [
-      { label: '关于公众号排版工具', click: () => {
+      { label: '关于选题排版工作台', click: () => {
         dialog.showMessageBox({
           type: 'info',
           title: '关于',
-          message: '公众号排版工具',
-          detail: 'Markdown 转微信公众号排版\n版本 1.0'
+          message: '选题排版工作台',
+          detail: '选题管理 + Markdown 转微信公众号排版\n版本 2.4.1'
         });
       }}
     ]}
@@ -71,7 +70,7 @@ function createWindow() {
     minHeight: 680,
     show: false,
     backgroundColor: '#f7f8fa',
-    title: '公众号排版工具',
+    title: store.getSettings().appTitle || '选题排版工作台',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -108,8 +107,18 @@ function registerIpc() {
   ipcMain.handle('store:getImages', () => store.getImages());
   ipcMain.handle('store:saveImage', (e, img) => store.saveImage(img));
   ipcMain.handle('store:deleteImage', (e, id) => store.deleteImage(id));
+  ipcMain.handle('store:getTopics', () => store.getTopics());
+  ipcMain.handle('store:saveTopic', (e, t) => store.saveTopic(t));
+  ipcMain.handle('store:deleteTopic', (e, id) => store.deleteTopic(id));
+  ipcMain.handle('store:saveTopics', (e, arr) => store.saveTopics(arr));
   ipcMain.handle('store:getSettings', () => store.getSettings());
   ipcMain.handle('store:saveSettings', (e, s) => store.saveSettings(s));
+  ipcMain.handle('app:setTitle', (e, title) => {
+    const t = (typeof title === 'string' && title.trim()) ? title.trim() : '选题排版工作台';
+    const s = store.getSettings(); s.appTitle = t; store.saveSettings(s);
+    const win = BrowserWindow.fromWebContents(e.sender); if (win) win.setTitle(t);
+    return t;
+  });
   ipcMain.handle('clipboard:writeHTML', async (e, html, text) => {
     await clipboard.write([new ClipboardItem({
       'text/html': html,
@@ -126,10 +135,6 @@ function registerIpc() {
     if (r.canceled || !r.filePath) return false;
     fs.writeFileSync(r.filePath, html, 'utf8');
     return r.filePath;
-  });
-  ipcMain.handle('image:upload', async (e, arr, filename) => {
-    const settings = store.getSettings();
-    return uploadImage(Buffer.from(arr), filename, settings);
   });
   ipcMain.handle('app:dataDir', () => store.dir);
 }

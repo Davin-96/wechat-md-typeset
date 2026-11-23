@@ -18,8 +18,8 @@ class Store {
     this.articlesDir = path.join(dir, '文章');
     fs.mkdirSync(this.articlesDir, { recursive: true });
     this.themesFile = path.join(dir, '主题.json');
-    this.imagesFile = path.join(dir, '素材.json');
     this.settingsFile = path.join(dir, '设置.json');
+    this.topicsFile = path.join(dir, '选题.json');
   }
 
   listArticles() {
@@ -58,19 +58,23 @@ class Store {
     return true;
   }
 
-  getImages() { return readJSON(this.imagesFile, []); }
-  saveImage(image) {
-    if (!image.id) image.id = uid('i');
-    image.createdAt = Date.now();
-    const arr = this.getImages();
-    arr.unshift(image);
-    writeJSON(this.imagesFile, arr);
-    return image;
+  // ===== 选题工作台 =====
+  getTopics() { return readJSON(this.topicsFile, []); }
+  saveTopic(topic) {
+    if (!topic.id) topic.id = uid('p');
+    topic.updatedAt = Date.now();
+    if (!topic.createdAt) topic.createdAt = topic.updatedAt;
+    const arr = this.getTopics();
+    const i = arr.findIndex(t => t.id === topic.id);
+    if (i >= 0) arr[i] = topic; else arr.unshift(topic);
+    writeJSON(this.topicsFile, arr);
+    return topic;
   }
-  deleteImage(id) {
-    writeJSON(this.imagesFile, this.getImages().filter(i => i.id !== id));
+  deleteTopic(id) {
+    writeJSON(this.topicsFile, this.getTopics().filter(t => t.id !== id));
     return true;
   }
+  saveTopics(topics) { writeJSON(this.topicsFile, topics); return topics; }
 
   getSettings() {
     return Object.assign({
@@ -84,7 +88,8 @@ class Store {
       customResponsePath: 'data.url',
       customExtraFields: '',
       autoSave: true,
-      defaultThemeId: 'moyu'
+      defaultThemeId: 'moyu',
+      appTitle: '选题排版工作台'
     }, readJSON(this.settingsFile, {}));
   }
   saveSettings(s) { writeJSON(this.settingsFile, s); return s; }

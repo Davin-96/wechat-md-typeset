@@ -4,8 +4,9 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; script-src 'self'; connect-src 'self' https: http:;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>公众号排版工具</title>
+  <title>选题排版工作台</title>
   <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/topics.css">
   <script src="js/boot.js"></script>
 </head>
 <body>
@@ -17,30 +18,70 @@
   <div id="app">
     <header class="topbar glass">
       <div class="brand">
-        <div class="brand-mark">排</div>
-        <span class="brand-name">公众号排版</span>
+        <div class="brand-mark">选</div>
+        <span class="brand-name" id="appTitle" title="点击修改工作台名称">选题排版工作台</span>
+        <input class="brand-name-input hidden" id="appTitleInput" maxlength="24" aria-label="工作台名称" autocomplete="off">
+        <button id="renameBtn" class="rename-btn" title="修改工作台名称" aria-label="修改工作台名称">✎</button>
       </div>
-      <div class="seg top-seg" role="tablist" aria-label="主视图">
-        <button class="on" data-view="edit">编辑</button>
-        <button data-view="themes">主题</button>
-        <button data-view="assets">素材</button>
+      <span class="topbar-sep" aria-hidden="true"></span>
+      <div class="seg work-seg" role="tablist" aria-label="工作区切换">
+        <button class="on" data-workspace="topics">选题</button>
+        <button data-workspace="editor">排版</button>
       </div>
       <div class="topbar-actions">
-        <button id="editThemeBtn" class="btn">编辑样式</button>
-        <button id="insertImageBtn" class="btn">插入图片</button>
-        <button id="copyBtn" class="btn btn-primary">复制到公众号</button>
-        <button id="exportBtn" class="btn">导出 HTML</button>
+        <button id="editThemeBtn" class="btn editor-only">编辑样式</button>
+        <button id="copyBtn" class="btn btn-primary editor-only">复制到公众号</button>
+        <button id="exportBtn" class="btn editor-only">导出 HTML</button>
         <button id="uiModeBtn" class="btn btn-icon" title="切换明暗" aria-label="切换明暗">☾</button>
-        <button id="settingsBtn" class="btn btn-icon" title="设置" aria-label="设置">⚙</button>
       </div>
     </header>
 
+    <!-- ===== 选题工作区（雷达风格） ===== -->
+    <section id="topicWorkspace" class="ws-pane">
+      <div class="topic-scroll">
+        <div class="topic-wrap">
+          <div class="topic-hero">
+            <div class="topic-hero-copy">
+              <div class="topic-eyebrow">TOPIC INTELLIGENCE</div>
+              <h2>捕捉每一个<br><em>值得写的选题</em></h2>
+              <p>左侧切换选题阶段与标签，右侧大屏浏览。点「开始写作」直接进入排版，发布后可一键回写状态。</p>
+            </div>
+            <div class="topic-kpis" id="topicKpis"></div>
+          </div>
+          <div class="topic-workbench">
+            <aside class="topic-rail glass" id="topicRail"></aside>
+            <main class="topic-stage glass">
+              <div class="topic-stage-head">
+                <div class="topic-stage-icon" id="topicStageIcon">⚡</div>
+                <div class="topic-stage-title"><h2 id="topicStageTitle">待验证</h2><p id="topicStageSub">等待验证价值的选题</p></div>
+                <div class="topic-stage-tools">
+                  <span class="topic-stage-count" id="topicStageCount">—</span>
+                  <div class="topic-search"><input id="topicSearch" type="text" placeholder="搜索标题、笔记、标签…" autocomplete="off" aria-label="搜索选题"></div>
+                  <button type="button" id="topicSortBtn" class="topic-sort tp-drop-trigger" aria-haspopup="listbox" aria-expanded="false" title="排序规则" aria-label="排序规则">
+                    <span class="tp-dd-label" id="topicSortLabel">自定义排序</span><span class="tp-dd-arrow">⌄</span>
+                  </button>
+                  <span class="topic-tools-spacer"></span>
+                  <button id="topicImportBtn" class="btn">导入</button>
+                  <button id="topicExportBtn" class="btn">导出</button>
+                  <button id="topicNewBtn" class="btn btn-primary">＋ 新建选题</button>
+                </div>
+              </div>
+              <div class="topic-stage-list" id="topicStageList"></div>
+            </main>
+          </div>
+          <p class="topic-footer">数据保存在本机 · 选题与文章双向关联 · 无需云端</p>
+        </div>
+      </div>
+      <input type="file" id="topicImportFile" accept=".json,application/json" hidden>
+    </section>
+
+    <!-- ===== 排版工作区（原三栏） ===== -->
+    <section id="editorWorkspace" class="ws-pane hidden">
     <div class="workspace">
       <aside class="sidebar panel glass">
         <div class="sidebar-tabs">
           <button class="tab on" data-tab="articles">文章</button>
           <button class="tab" data-tab="themes">主题</button>
-          <button class="tab" data-tab="images">素材</button>
         </div>
         <div class="sidebar-body">
           <div class="tab-panel" data-panel="articles">
@@ -60,10 +101,6 @@
             <div class="chips" id="themeChips"></div>
             <button id="newThemeBtn" class="btn btn-block btn-new-theme">+ 新建主题</button>
             <div id="themeList"></div>
-          </div>
-          <div class="tab-panel hidden" data-panel="images">
-            <button id="uploadImageBtn" class="btn btn-block">+ 上传素材</button>
-            <div id="imageList" class="list image-list"></div>
           </div>
         </div>
         <div class="sidebar-footer">
@@ -85,6 +122,7 @@
       <section class="preview-pane panel">
         <div class="pane-header">
           <span class="pane-title">公众号预览</span>
+          <button id="syncScrollBtn" class="sync-toggle on" title="左右同频滚动：开" aria-label="左右同频滚动"><span class="sync-ic">⇅</span>同步</button>
           <span id="previewThemeName" class="muted small" style="margin-left:auto"></span>
         </div>
         <div class="preview-scroll">
@@ -94,6 +132,36 @@
           </div>
         </div>
       </section>
+    </div>
+    </section>
+  </div>
+
+  <!-- 选题详情弹窗 -->
+  <div id="topicDetailModal" class="modal hidden">
+    <div class="modal-card topic-modal">
+      <div class="modal-header"><h3>选题详情</h3><button class="btn btn-icon modal-close" data-close aria-label="关闭">✕</button></div>
+      <div class="modal-body" id="topicDetailBody"></div>
+    </div>
+  </div>
+
+  <!-- 新建/编辑选题弹窗 -->
+  <div id="topicModal" class="modal hidden">
+    <div class="modal-card topic-modal">
+      <div class="modal-header"><h3 id="topicModalTitle">新建选题</h3><button class="btn btn-icon modal-close" data-close aria-label="关闭">✕</button></div>
+      <div class="modal-body">
+        <div class="field" id="topicFieldTitle"><label>标题 <span style="color:var(--danger,#ff453a)">*</span></label>
+          <input id="topicInTitle" class="input" placeholder="例如：如何给入门读者讲清楚 XX">
+          <div class="topic-err">标题不能为空。</div>
+        </div>
+        <div class="field"><label>标签（用逗号分隔）</label><input id="topicInTags" class="input" placeholder="例如：效率工具, 入门指南"></div>
+        <div class="field" id="topicFieldLinks"><label>素材链接（每行一个 URL）</label>
+          <textarea id="topicInLinks" class="input" style="height:auto;min-height:62px;padding:8px 10px;line-height:1.5;resize:vertical" placeholder="https://…"></textarea>
+          <div class="topic-err">链接必须以 http:// 或 https:// 开头。</div>
+        </div>
+        <div class="field"><label>笔记</label><textarea id="topicInNotes" class="input" style="height:auto;min-height:76px;padding:8px 10px;line-height:1.5;resize:vertical" placeholder="选题动机、切入点、素材要点…"></textarea></div>
+        <div class="field"><label>状态</label><select id="topicInStatus" class="input"></select></div>
+      </div>
+      <div class="modal-footer"><button class="btn" data-close>取消</button><button id="topicSaveBtn" class="btn btn-primary">保存选题</button></div>
     </div>
   </div>
 
@@ -114,79 +182,19 @@
     </div>
   </div>
 
-  <div id="imageModal" class="modal hidden">
-    <div class="modal-card">
-      <div class="modal-header"><h3>插入图片</h3><button class="btn btn-icon modal-close" data-close aria-label="关闭">✕</button></div>
-      <div class="modal-body">
-        <div class="seg seg-tabs">
-          <button class="on" data-imgtab="upload">本地上传</button>
-          <button data-imgtab="url">图片 URL</button>
-          <button data-imgtab="library">素材库</button>
-        </div>
-        <div class="img-tab-panel" data-imgpanel="upload">
-          <div id="dropZone" class="drop-zone">
-            <p class="drop-title">点击或拖拽图片到此处</p>
-            <p class="muted small">自动上传到图床并插入文章</p>
-            <input id="fileInput" type="file" accept="image/*" hidden>
-          </div>
-          <div id="uploadStatus" class="muted small"></div>
-        </div>
-        <div class="img-tab-panel hidden" data-imgpanel="url">
-          <input id="imageUrlInput" class="input" placeholder="https://example.com/image.png">
-          <button id="insertUrlBtn" class="btn btn-primary btn-block">插入</button>
-        </div>
-        <div class="img-tab-panel hidden" data-imgpanel="library">
-          <div id="imagePickerList" class="list image-list"></div>
-        </div>
-      </div>
-    </div>
+  <!-- 通用玻璃风下拉浮层（状态 / 排序共用，fixed 定位避免被滚动容器裁剪） -->
+  <div id="tpDropdown" class="tp-dropdown hidden" role="listbox">
+    <div class="tp-dd-head" id="tpDdHead">选择</div>
+    <div class="tp-dd-list" id="tpDdList"></div>
   </div>
 
-  <div id="settingsModal" class="modal hidden">
-    <div class="modal-card">
-      <div class="modal-header"><h3>设置</h3><button class="btn btn-icon modal-close" data-close aria-label="关闭">✕</button></div>
-      <div class="modal-body">
-        <div class="field"><label>界面外观</label>
-          <select id="uiModeSelect" class="input">
-            <option value="auto">跟随系统</option>
-            <option value="light">浅色</option>
-            <option value="dark">深色</option>
-          </select>
-        </div>
-        <div class="field"><label>图床服务</label>
-          <select id="imageHostSelect" class="input">
-            <option value="catbox">Catbox（免登录）</option>
-            <option value="smms">SM.MS（需 Token）</option>
-            <option value="imgbb">ImgBB（需 Key）</option>
-            <option value="custom">自定义图床</option>
-          </select>
-        </div>
-        <div class="field"><label>SM.MS Token</label><input id="smmsToken" class="input" placeholder="sm.ms 账号 Token"></div>
-        <div class="field"><label>ImgBB Key</label><input id="imgbbKey" class="input" placeholder="imgbb API Key"></div>
-        <div id="customFields" class="hidden">
-          <div class="field"><label>API 地址</label><input id="customApiUrl" class="input" placeholder="https://你的图床/api/upload"></div>
-          <div class="form-grid">
-            <div class="field"><label>文件字段名</label><input id="customFileField" class="input" placeholder="file"></div>
-            <div class="field"><label>Token 请求头</label><input id="customTokenHeader" class="input" placeholder="Authorization"></div>
-          </div>
-          <div class="field"><label>Token（可选）</label><input id="customToken" class="input" placeholder="留空则不发送认证头"></div>
-          <div class="field"><label>响应 URL 路径</label><input id="customResponsePath" class="input" placeholder="data.url（留空自动识别）"></div>
-          <div class="field"><label>额外表单字段（每行 key=value）</label><textarea id="customExtraFields" class="input" style="height:auto;min-height:56px;padding:8px 10px;line-height:1.5;resize:vertical;" placeholder="token=xxx&#10;type=image"></textarea></div>
-        </div>
-        <div class="field row"><label>自动保存</label><input id="autoSaveToggle" type="checkbox"></div>
-        <div class="field"><label>数据目录</label><div id="settingsDataDir" class="muted small"></div></div>
-        <p class="muted small note">图床上传依赖网络，国外服务在国内可能不稳定。手动填图片 URL 始终可用。</p>
-      </div>
-      <div class="modal-footer"><button id="saveSettingsBtn" class="btn btn-primary">保存设置</button></div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast hidden"></div>
 
   <script src="lib/markdown-it.min.js"></script>
   <script src="lib/highlight.min.js"></script>
   <script src="js/themes.js"></script>
   <script src="js/engine.js"></script>
+  <script src="js/topics.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
