@@ -1,6 +1,6 @@
 {
   "name": "wechat-md-editor",
-  "version": "2.4.1",
+  "version": "2.5.0",
   "description": "选题管理 + Markdown 转微信公众号排版 · 50 套主题 · 苹果风界面 · 左右同频滚动 · 可自定义标题",
   "main": "src/main/main.js",
   "author": "阿文",

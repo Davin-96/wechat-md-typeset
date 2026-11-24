@@ -184,9 +184,13 @@
     else if (h1 === 'leftborder') titleStyle = `color:${text};border-left:3px solid ${accent};padding-left:5px;font-family:${font};font-size:11px`;
     else if (h1 === 'serifBig') titleStyle = `color:${text};font-family:Georgia,serif;font-size:12px;letter-spacing:1px`;
     let h2Css = `font-size:8px;color:${accent};font-weight:700`;
-    if (h2 === 'leftborder') h2Css = `font-size:8px;color:${text};border-left:2px solid ${accent};padding-left:4px;font-weight:700`;
-    if (h2 === 'block') h2Css = `font-size:8px;color:#fff;background:${accent};padding:2px 4px;border-radius:2px;display:inline-block;font-weight:700`;
-    if (c.decor && c.decor.h2Deco) h2Css = `font-size:8px;color:${accent};font-weight:700;letter-spacing:1px`;
+    if (h2 === 'leftborder' || h2 === 'slash') h2Css = `font-size:8px;color:${text};border-left:2px solid ${accent};padding-left:4px;font-weight:700`;
+    if (h2 === 'block' || h2 === 'capsule' || h2 === 'tabs') h2Css = `font-size:8px;color:#fff;background:${accent};padding:2px 5px;border-radius:${h2 === 'capsule' ? '8px' : '2px'};display:inline-block;font-weight:700`;
+    if (h2 === 'dashUnderline') h2Css = `font-size:8px;color:${text};border-bottom:1px dashed ${accent};font-weight:700`;
+    if (h2 === 'doubleline' || h2 === 'gradientbar') h2Css = `font-size:8px;color:${text};border-top:1px solid ${accent};border-bottom:1px solid ${accent};padding:1px 0;font-weight:700`;
+    if (h2 === 'gradientText') h2Css = `font-size:9px;font-weight:700;color:${accent};letter-spacing:1px`;
+    if (h2 === 'center' || h2 === 'dotprefix') h2Css = `font-size:8px;color:${accent};font-weight:700;letter-spacing:1px`;
+    if (c.decor && c.decor.h2Deco && !c.h2StyleEdited) h2Css = `font-size:8px;color:${accent};font-weight:700;letter-spacing:1px`;
     const dark = c.dark;
     const lineColor = dark ? 'rgba(255,255,255,.25)' : 'rgba(0,0,0,.15)';
     const quoteBorder = c.quoteStyle === 'none' ? 'none' : `border-left:2px solid ${accent}`;
@@ -325,7 +329,13 @@
           input.value = config[f.key] || ''; input.placeholder = '可选';
         }
         input.dataset.key = f.key;
-        input.addEventListener('input', () => { state.editingConfig[f.key] = input.value; render(); });
+        input.addEventListener('input', () => {
+          state.editingConfig[f.key] = input.value;
+          // 改动一级/二级标题样式时，停用对应装饰层，让用户选的样式真正生效
+          if (f.key === 'h1Style') state.editingConfig.h1StyleEdited = true;
+          if (f.key === 'h2Style') state.editingConfig.h2StyleEdited = true;
+          render();
+        });
         field.appendChild(input); grid.appendChild(field);
       });
       sec.appendChild(grid); themeForm.appendChild(sec);

@@ -40,6 +40,12 @@
       case 'gradient': return Object.assign(base, { fontSize: '22px', color: '#fff', textAlign: 'center', padding: '10px 24px', borderRadius: '8px', backgroundColor: accent, backgroundImage: 'linear-gradient(135deg, ' + accent + ' 0%, ' + shadeHex(accent, 0.4) + ' 100%)', boxShadow: '0 4px 12px ' + hexToRgba(accent, 0.3) });
       case 'outline': return Object.assign(base, { fontSize: '22px', color: textColor, textAlign: 'center', border: '2px solid ' + accent, borderRadius: '8px', padding: '10px 16px', letterSpacing: '1px' });
       case 'serifBig': return Object.assign(base, { fontSize: '26px', color: textColor, textAlign: 'center', letterSpacing: '3px', fontFamily: fontFamilies.serif });
+      case 'capsule': return Object.assign(base, { fontSize: '22px', color: '#fff', backgroundColor: accent, padding: '10px 26px', borderRadius: '999px', textAlign: 'center', letterSpacing: '1px' });
+      case 'dualLine': return Object.assign(base, { fontSize: '23px', color: textColor, textAlign: 'center', borderTop: '2px solid ' + accent, borderBottom: '2px solid ' + accent, padding: '10px 0', letterSpacing: '2px' });
+      case 'accentBar': return Object.assign(base, { fontSize: '23px', color: textColor, borderTop: '6px solid ' + accent, paddingTop: '12px', textAlign: 'left' });
+      case 'dashUnderline': return Object.assign(base, { fontSize: '23px', color: textColor, borderBottom: '2px dashed ' + accent, paddingBottom: '8px', textAlign: 'center' });
+      case 'shadow': return Object.assign(base, { fontSize: '30px', color: accent, textAlign: 'center', textShadow: '2px 2px 0 ' + hexToRgba(accent, 0.25), letterSpacing: '1px' });
+      case 'split': return Object.assign(base, { fontSize: '22px', color: textColor, textAlign: 'center', padding: '10px 0', backgroundImage: 'linear-gradient(90deg,' + accent + ' 0%,' + accent + ' 18%,transparent 18%,transparent 82%,' + accent + ' 82%,' + accent + ' 100%)', backgroundRepeat: 'no-repeat', backgroundSize: '100% 2px', backgroundPosition: 'center' });
       case 'plain':
       default: return Object.assign(base, { fontSize: '24px', color: textColor, textAlign: 'center' });
     }
@@ -53,6 +59,13 @@
       case 'gradientbar': return Object.assign(base, { fontSize: '20px', color: textColor, paddingBottom: '8px', backgroundImage: 'linear-gradient(to right, ' + accent + ' 0%, ' + hexToRgba(accent, 0) + ' 100%)', backgroundRepeat: 'no-repeat', backgroundSize: '100% 3px', backgroundPosition: 'left bottom' });
       case 'plain': return Object.assign(base, { fontSize: '20px', color: textColor });
       case 'center': return Object.assign(base, { fontSize: '18px', color: textColor, textAlign: 'center' });
+      case 'capsule': return Object.assign(base, { fontSize: '17px', color: '#fff', backgroundColor: accent, padding: '6px 16px', borderRadius: '999px', display: 'inline-block' });
+      case 'dashUnderline': return Object.assign(base, { fontSize: '19px', color: textColor, borderBottom: '2px dashed ' + accent, paddingBottom: '6px' });
+      case 'doubleline': return Object.assign(base, { fontSize: '19px', color: textColor, textAlign: 'center', borderTop: '1px solid ' + accent, borderBottom: '1px solid ' + accent, padding: '6px 0', letterSpacing: '2px' });
+      case 'dotprefix': return Object.assign(base, { fontSize: '19px', color: textColor, paddingLeft: '20px', backgroundImage: 'radial-gradient(circle at 6px center,' + accent + ' 4px,transparent 5px)', backgroundRepeat: 'no-repeat' });
+      case 'gradientText': return Object.assign(base, { fontSize: '21px', fontWeight: 'bold', color: accent, backgroundImage: 'linear-gradient(90deg,' + accent + ',' + shadeHex(accent, 0.5) + ')', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent' });
+      case 'slash': return Object.assign(base, { fontSize: '19px', color: textColor, backgroundColor: hexToRgba(accent, 0.1), padding: '7px 14px', borderLeft: '5px solid ' + accent, borderRadius: '0 8px 8px 0' });
+      case 'tabs': return Object.assign(base, { fontSize: '18px', color: '#fff', backgroundColor: accent, display: 'inline-block', padding: '7px 18px 7px 14px', borderRadius: '6px 6px 0 0' });
       case 'underline':
       default: return Object.assign(base, { fontSize: '20px', color: accent, borderBottom: '2px solid ' + accent, padding: '4px 0' });
     }
@@ -93,6 +106,13 @@
       blockquote = { borderLeft: '4px solid ' + accent, backgroundColor: quoteBg, color: subText, padding: '10px 14px', margin: '14px 0', borderRadius: '0 6px 6px 0' };
     }
     if (c.blockquoteStyle) Object.assign(blockquote, c.blockquoteStyle);
+    // 装饰让位：用户在样式面板主动改过 H1/H2 样式时，停用对应装饰，避免样式被装饰层吞掉
+    let decor = c.decor || null;
+    if (decor && (c.h1StyleEdited || c.h2StyleEdited)) {
+      decor = Object.assign({}, decor);
+      if (c.h1StyleEdited) delete decor.h1Deco;
+      if (c.h2StyleEdited) delete decor.h2Deco;
+    }
     return {
       container: container, accent: accent, dark: dark,
       h2Number: c.h2Style === 'number', quoteMark: quoteMark && !c.decor?.quoteMark,
@@ -118,7 +138,7 @@
       strong: { color: accent, fontWeight: 'bold' },
       em: { color: emColor, fontStyle: 'italic' }, del: { color: delColor },
       codeTheme: c.codeTheme || 'atom-one-dark',
-      decor: c.decor || null
+      decor: decor
     };
   }
 
@@ -576,8 +596,20 @@
     fontSize: ['14px', '15px', '16px', '17px', '18px'],
     lineHeight: ['1.5', '1.6', '1.75', '1.8', '2.0'],
     font: [{ value: 'sans', label: '无衬线（系统）' }, { value: 'serif', label: '衬线 / 宋体' }, { value: 'kai', label: '楷体' }, { value: 'mono', label: '等宽' }],
-    h1Style: [{ value: 'plain', label: '居中纯文字' }, { value: 'block', label: '色块' }, { value: 'leftborder', label: '左边框' }, { value: 'underline', label: '下划线' }, { value: 'outline', label: '描边框' }, { value: 'gradient', label: '渐变色块' }, { value: 'serifBig', label: '大号衬线' }],
-    h2Style: [{ value: 'underline', label: '下划线' }, { value: 'leftborder', label: '左边框' }, { value: 'number', label: '数字序号' }, { value: 'block', label: '色块' }, { value: 'gradientbar', label: '渐变下划线' }, { value: 'plain', label: '纯文字' }, { value: 'center', label: '居中' }],
+    h1Style: [
+      { value: 'plain', label: '居中纯文字' }, { value: 'block', label: '色块' }, { value: 'leftborder', label: '左边框' },
+      { value: 'underline', label: '下划线' }, { value: 'outline', label: '描边框' }, { value: 'gradient', label: '渐变色块' },
+      { value: 'serifBig', label: '大号衬线' }, { value: 'capsule', label: '胶囊按钮' }, { value: 'dualLine', label: '双线夹击' },
+      { value: 'accentBar', label: '顶部色条' }, { value: 'dashUnderline', label: '虚线下划' }, { value: 'shadow', label: '立体投影' },
+      { value: 'split', label: '左右短线' }
+    ],
+    h2Style: [
+      { value: 'underline', label: '下划线' }, { value: 'leftborder', label: '左边框' }, { value: 'number', label: '数字序号' },
+      { value: 'block', label: '色块' }, { value: 'gradientbar', label: '渐变下划线' }, { value: 'plain', label: '纯文字' },
+      { value: 'center', label: '居中' }, { value: 'capsule', label: '胶囊标签' }, { value: 'dashUnderline', label: '虚线下划' },
+      { value: 'doubleline', label: '双线夹击' }, { value: 'dotprefix', label: '圆点前缀' }, { value: 'gradientText', label: '渐变文字' },
+      { value: 'slash', label: '斜切色条' }, { value: 'tabs', label: '标签页' }
+    ],
     codeTheme: [{ value: 'atom-one-dark', label: 'Atom One Dark' }, { value: 'github-light', label: 'GitHub Light' }, { value: 'monokai', label: 'Monokai' }, { value: 'xcode', label: 'Xcode（浅色）' }, { value: 'dracula', label: 'Dracula' }],
     quoteStyle: [{ value: 'default', label: '左边框 + 底色' }, { value: 'card', label: '圆角卡片' }, { value: 'mark', label: '引号装饰' }, { value: 'ticket', label: '虚线票据' }, { value: 'none', label: '无装饰' }],
     imgRadius: ['0', '4px', '8px', '12px', '18px']

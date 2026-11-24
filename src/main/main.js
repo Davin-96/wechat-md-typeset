@@ -54,7 +54,7 @@ function buildChineseMenu() {
           type: 'info',
           title: '关于',
           message: '选题排版工作台',
-          detail: '选题管理 + Markdown 转微信公众号排版\n版本 2.4.1'
+          detail: '选题管理 + Markdown 转微信公众号排版\n版本 2.5.0'
         });
       }}
     ]}
